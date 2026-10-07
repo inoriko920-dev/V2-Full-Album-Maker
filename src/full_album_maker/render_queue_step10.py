@@ -187,9 +187,61 @@ class RenderQueueStore:
         values = raw.get("jobs", [])
         if not isinstance(values, list):
             raise ValueError("Daftar render job tidak valid.")
-        return [job_from_dict(item) for item in values]
+        jobs: list[RenderJob] = []
+        for index, item in enumerate(values):
+            try:
+                jobs.append(job_from_dict(item))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Render job persistence rusak pada item #{index + 1}: {exc}"
+                ) from exc
+        return jobs
+
+    def _quarantine_corrupt_store(self, reason: Exception) -> Path | None:
+        if not self.path.exists():
+            self.last_recovery_warning = (
+                "Riwayat render tidak dapat dibaca, tetapi file sumber sudah tidak ada. "
+                "Aplikasi dibuka dengan antrean baru."
+            )
+            return None
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        quarantine = self.path.with_name(
+            f"{self.path.stem}.corrupt-{timestamp}-{uuid4().hex[:8]}{self.path.suffix}"
+        )
+        quarantine.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.replace(self.path, quarantine)
+        except OSError:
+            try:
+                shutil.copy2(self.path, quarantine)
+            except OSError as backup_exc:
+                self.persistence_blocked = True
+                self.last_recovery_warning = (
+                    "Riwayat render rusak dan tidak dapat dikarantina. "
+                    "Aplikasi tetap dibuka, tetapi persistence Render Queue "
+                    f"dinonaktifkan agar file asli tidak tertimpa ({backup_exc})."
+                )
+                return None
+            try:
+                self.path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        self.quarantined_path = quarantine
+        self.last_recovery_warning = (
+            "Riwayat Render Queue rusak dan telah dikarantina sebagai "
+            f"{quarantine.name}. Aplikasi dibuka dengan antrean baru; "
+            "file karantina dipertahankan untuk pemeriksaan/recovery manual."
+        )
+        return quarantine
 
     def save(self, jobs: Iterable[RenderJob]) -> None:
+        if self.persistence_blocked:
+            raise ValueError(
+                "Persistence Render Queue dinonaktifkan karena store rusak "
+                "belum berhasil dikarantina."
+            )
         values = _bounded_history(jobs)
         payload = {
             "format": QUEUE_FORMAT,
