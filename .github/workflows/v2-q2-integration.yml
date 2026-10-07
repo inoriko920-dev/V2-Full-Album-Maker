@@ -1,0 +1,88 @@
+name: V2 Q2 Integration Quality Gate
+
+on:
+  push:
+    branches:
+      - quality-q2-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  q2-full-regression:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_SCALE_FACTOR: '1'
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+
+    steps:
+      - name: Checkout Q2 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Linux Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Q2 inventory regression floor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          tests = sorted(Path("tests").glob("test_*.py"))
+          print(f"Q2 Python test files: {len(tests)}")
+          assert len(tests) >= 115, f"Regression floor turun: {len(tests)} < 115"
+          PY
+
+      - name: Q2 full pytest regression
+        timeout-minutes: 20
+        run: |
+          python -m pytest -q
+
+      - name: Q2 cross-workspace session lifecycle evidence
+        timeout-minutes: 10
+        run: |
+          python -m pytest -q \
+            tests/test_step09_session_flow.py \
+            tests/test_v2_workspace_registry.py \
+            tests/test_step11_e2e.py \
+            tests/test_step11_integration_core.py \
+            tests/test_step11_production_integration.py \
+            tests/test_step11_lifecycle.py \
+            tests/test_step11_close_lifecycle.py \
+            tests/test_v2_task_lifecycle.py \
+            tests/test_v2_project_persistence.py \
+            tests/test_editor_v2_save_dirty.py \
+            tests/test_render_lifecycle.py
+
+      - name: Q2 M0-M9 ownership smoke
+        run: |
+          python -m pytest -q \
+            tests/test_v2_feature_parity_registry.py \
+            tests/test_v2_app_kernel.py \
+            tests/test_v2_task_lifecycle.py \
+            tests/test_v2_project_persistence.py \
+            tests/test_v2_render_engine.py \
+            tests/test_v2_media_services.py \
+            tests/test_v2_beat_analysis.py \
+            tests/test_v2_workspace_registry.py \
+            tests/test_v2_legacy_bridge_retirement.py \
+            tests/test_v2_consolidation.py
