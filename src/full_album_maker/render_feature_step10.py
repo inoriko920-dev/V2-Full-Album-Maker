@@ -63,6 +63,7 @@ def _install_widgets(self) -> None:
     self._s10_queue = RenderQueue()
     self._s10_async = RenderAsyncBridge(parent=self)
     self.destroyed.connect(lambda *_args: self._s10_async.close())
+    self.destroyed.connect(lambda *_args: self._s10_queue.close())
     self._s10_preflight_token = 0
     self._s10_preflight_report = None
     self._s10_preflight_capability = None
@@ -353,8 +354,9 @@ def _add_queue(self) -> None:
 def _pump_queue(self) -> None:
     if self._s10_async.busy:
         return
-    job = self._s10_queue.next_queued()
+    job = self._s10_queue.claim_next_queued()
     if job is None:
+        self._s10_refresh()
         return
     self._s10_selected_key = (job.job_id, job.attempt_id)
     if self._s10_async.start(job):
@@ -559,6 +561,9 @@ def install_step10_render() -> None:
             bridge = getattr(self, "_s10_async", None)
             if bridge is not None:
                 bridge.close()
+            queue = getattr(self, "_s10_queue", None)
+            if queue is not None:
+                queue.close()
 
     Window.__init__ = wrapped_init
     Window.closeEvent = wrapped_close_event
