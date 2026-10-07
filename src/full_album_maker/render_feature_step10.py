@@ -62,8 +62,13 @@ def verified_output_path(job: RenderJob | None) -> Path | None:
 def _install_widgets(self) -> None:
     self._s10_queue = RenderQueue()
     self._s10_async = RenderAsyncBridge(parent=self)
-    self.destroyed.connect(lambda *_args: self._s10_async.close())
-    self.destroyed.connect(lambda *_args: self._s10_queue.close())
+    queue = self._s10_queue
+    bridge = self._s10_async
+    # Capture resources directly rather than self; capturing the window in its
+    # own destroyed callbacks can keep a Python reference cycle alive and delay
+    # Windows file-handle release.
+    self.destroyed.connect(lambda *_args, bridge=bridge: bridge.close())
+    self.destroyed.connect(lambda *_args, queue=queue: queue.close())
     self._s10_preflight_token = 0
     self._s10_preflight_report = None
     self._s10_preflight_capability = None
