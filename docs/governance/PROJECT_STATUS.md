@@ -4,52 +4,52 @@
 PLANNING
 
 ## Current STEP
-STEP 01 — Audit Repo Lama dan Kontrak Perilaku
+STEP 02 — Riset Pondasi Matang, Lisensi, dan Keputusan Adopsi
 
-## STEP 00 Status
-PASS
+## Gate Status
+- STEP 00: PASS
+- STEP 01: PASS
+- STEP 02: PASS
 
-## STEP 01 Status
-PASS
+## STEP 02 Final Decisions
+- Current V2 repository remains the application foundation; no external repo replaces it wholesale.
+- FFmpeg/ffprobe remain the canonical final render/probe engine.
+- PySide6/Qt remains the desktop UI toolkit.
+- MLT Framework is architecture reference only.
+- OpenShot/libopenshot is reference only for reader/cache/lifecycle/animation/beat-sync patterns.
+- PyAV is deferred; do not upgrade Python merely to adopt it.
+- imageio-ffmpeg and MoviePy are reference only, not runtime render foundations.
+- projectM is only a possible isolated post-V2 visualizer/plugin after the core is stable.
+- NumPy 2.3.x is the primary candidate for a future BeatAnalysisService, subject to Windows/PyInstaller/size/performance gates.
+- SciPy is deferred until measured need exists.
+- librosa is a development/research oracle, not a portable runtime dependency.
+- aubio and Essentia are rejected for the core/distribution license profile.
+- Python >=3.11 remains the initial stabilization baseline.
+- Third-party binary/license compliance is a release quality gate.
 
-## Completed
-- V2 repository created and source copied.
-- Baseline integrity verified: 372/372 blobs identical.
-- Old repository remains read-only for V2 work.
-- Immutable V2 recovery branch created.
-- Planning branch created.
-- Governance and handoff rules established.
-- Production startup mapped: 30 runtime install/patch activations before the final window is constructed.
-- Repository complexity mapped: 149 Python source files, 115 Python test files, and 17 GitHub workflows.
-- Authoritative state contract mapped: ProjectDocument + EditorController/EditorSession; legacy Project remains compatibility/persistence bridge only.
-- Nine production workspaces and their state ownership mapped.
-- Timeline Packed/Free/crossfade/gap contracts frozen.
-- Production render chain mapped through Step08 -> V13 -> S11 -> FFmpegV2 compiler layers.
-- AI privacy, permission, revision, stable-ID, and fail-closed contracts frozen.
-- Save/autosave/recovery/transactional output contracts frozen.
-- Windows portable build/release baseline audited.
-- STEP 01 risk register, behavior contract C-01..C-20, and freeze zones established.
+## Beat/Animation Direction
+Future planning may introduce:
+`bundled FFmpeg PCM decode -> BeatAnalysisService -> fingerprinted analysis cache -> BeatResponse curves -> Preview/Render consumers`.
 
-## Important Baseline Evidence
-- V2 main baseline: `e3bc35b024654271cd594703f1402f9b003b1b08`.
-- The baseline copy's Windows workflow passed regression, real-FFmpeg checks, EXE build, ZIP creation, and isolated portable smoke.
-- Its final workflow status was failure only because Publish stable GitHub Release attempted to publish the already-existing v1.5.0 release/tag. This is release-workflow idempotence technical debt, not an application/runtime regression.
+This does not authorize implementation yet. Beat analysis must not alter audio timing, and preview/final render must consume the same deterministic analysis data.
 
 ## Coding Status
 BLOCKED — planning phase.
 
-No STEP 01 source-code, dependency, UI, schema, renderer, or workflow implementation changes were made.
+No STEP 02 source-code, dependency, UI, schema, renderer, or workflow implementation changes were made.
 
 ## Next STEP
-STEP 02 — Riset Pondasi Matang, Lisensi, dan Keputusan Adopsi.
+STEP 03 — Target Architecture V2 dan Strategi Migrasi Bertahap.
 
-STEP 02 must evaluate external technologies against the behavior contracts from STEP 01. It must not select a technology merely because it is popular or more modern.
+STEP 03 must design adapter/facade boundaries and an incremental migration path while preserving STEP 01 behavior contracts and STEP 02 adoption decisions.
 
 ## Canonical References
 - Master planning DOCX.
 - STEP 00 DOCX.
 - STEP 01 DOCX.
+- STEP 02 DOCX.
 - `docs/planning/STEP_01_AUDIT_SUMMARY.md`
-- `docs/planning/STEP_01_ARTIFACT_INTEGRITY.txt`
+- `docs/planning/STEP_02_DECISIONS.md`
+- `docs/planning/STEP_02_ARTIFACT_INTEGRITY.txt`
 - `PROJECT_GOVERNANCE.md`
 - `AI_HANDOFF.md`
