@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-import inspect
 import json
 from pathlib import Path
 import queue
@@ -283,17 +282,14 @@ def _call_generate_preview(
     cache_manager: CacheManager,
     publish_guard: Callable[[], bool],
 ) -> str:
-    """Call the current generator while preserving legacy test/adapter shape.
+    """Call the current generator with a lifecycle publication guard.
 
-    Adapters that do not yet accept publish_guard remain supported; stale output
-    from those adapters is still discarded by the worker after generation.
+    The production generator and current adapters accept publish_guard. A narrow
+    fallback remains only for legacy external adapters that reject that keyword;
+    stale output from that fallback is still evicted by the worker afterwards.
     """
 
     try:
-        parameters = inspect.signature(generate_preview).parameters
-    except (TypeError, ValueError):
-        parameters = {}
-    if "publish_guard" in parameters:
         return str(
             generate_preview(
                 asset,
@@ -301,7 +297,10 @@ def _call_generate_preview(
                 publish_guard=publish_guard,
             )
         )
-    return str(generate_preview(asset, cache_manager=cache_manager))
+    except TypeError as exc:
+        if "publish_guard" not in str(exc):
+            raise
+        return str(generate_preview(asset, cache_manager=cache_manager))
 
 
 def _discard_stale_worker_output(
