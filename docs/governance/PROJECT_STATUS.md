@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M6 BEAT ANALYSIS
+IMPLEMENTATION — M7 WORKSPACE REGISTRY
 
 ## Current STEP
-M6 — Beat Analysis — PASS
+M7 — Workspace Registry — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M6 — Beat Analysis — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, M3, M4, M5, and M6 are implemented and validated.
+M0/T1, M1, M2, M3, M4, M5, M6, and M7 are implemented and validated.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -93,14 +93,28 @@ M6 result:
 
 Validated candidate `a0d5a88a372f373c852c40242cea82511c1fd3dc` on Actions run `37595757999`: Q0 compile PASS; 58 M0–M6 contract tests passed (4 skipped); 19 Beat/Spectrum parity tests passed (1 skipped); 7 Accurate Preview/render parity tests passed (1 skipped); 12 persistence/production-shell tests passed; 2 long-album structural stress tests passed; real-FFmpeg M6 job PASS with 4 tests.
 
+M7 result:
+- AppKernel/CompositionRoot now owns one Qt-agnostic `WorkspaceRegistry`;
+- FoundationShell captures the exact bound registry and provides the single Qt WorkspaceStack replacement adapter;
+- all nine production routes are registered in canonical order: home, media, album, timeline, visual, template, spectrum, ai_agent, render;
+- route modules no longer subscribe directly to `workspace_changed`; the registry is the single route dispatch owner;
+- non-shell modules no longer access the private `workspace_stack._index`;
+- current route callbacks remain transitional adapters and keep existing context/inspector/timeline hide/show behavior for parity;
+- Render remains the last migrated workspace route;
+- full production navigation remains read-only against authoritative ProjectDocument;
+- UI/workflow, ProjectDocument schema v2, TIMEBASE=240000, M2–M6 service ownership, compiler chain, dependencies, and release behavior remain unchanged;
+- M8 Legacy Bridge Retirement was not started.
+
+Validated candidate `3e0af4f8b5c7a344a481b02f8805286209182b6f` on Actions run `37597489445`: Q0 compile PASS; 63 M0–M7 contract tests passed (4 skipped); 42 nine-route functional UI tests passed; 13 production navigation/persistence tests passed; 23 responsive/shell regression tests passed; 2 long-album structural stress tests passed; real-FFmpeg M7 job PASS with 2 tests.
+
 ## Next Operational Step
-M6 is PASS. On the next explicit implementation turn:
-1. Start **M7 — Workspace Registry** only.
-2. Re-read STEP 03/09 architecture and UI-preservation decisions before implementation.
-3. Replace runtime patch/workspace ownership one route at a time behind the approved WorkspaceRegistry boundary.
-4. Preserve all 9 production routes, UI/workflow behavior, ProjectDocument ownership, and current service facades.
-5. Run focused route-registration/navigation, production-shell, UI-preservation, persistence, and affected regression evidence before reporting M7 PASS.
-6. Do not proceed to M8 Legacy Bridge Retirement in the same turn unless explicitly instructed otherwise.
+M7 is PASS. On the next explicit implementation turn:
+1. Start **M8 — Legacy Bridge Retirement** only.
+2. Re-read STEP 03 migration/retirement rules and M7 WorkspaceRegistry evidence before removing any legacy owner.
+3. Retire only bridges/patch ownership that is no longer a production owner and already has replacement parity evidence.
+4. Preserve ProjectDocument/EditorSession authority, all 9 route behavior, UI baseline, and M2–M7 service boundaries.
+5. Run focused ownership, production navigation, persistence, render/preview, UI, and stress evidence before reporting M8 PASS.
+6. Do not proceed to M9 Consolidation in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.

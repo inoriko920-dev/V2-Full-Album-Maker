@@ -69,7 +69,7 @@ Verified evidence:
 5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
 6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
 
-Implementation is active. M0/T1 through M6 are completed and gate-protected.
+Implementation is active. M0/T1 through M7 are completed and gate-protected.
 
 ## M0/T1 Implementation Result — PASS
 - Branch: `impl-m0-t1-feature-parity`
@@ -146,12 +146,25 @@ Implementation is active. M0/T1 through M6 are completed and gate-protected.
 - GitHub Actions run `37595757999`: 58 M0–M6 contracts passed (4 skipped), 19 Beat/Spectrum parity tests passed (1 skipped), 7 Accurate Preview/render parity tests passed (1 skipped), 12 persistence/production-shell tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M6 job PASS with 4 tests.
 - Detailed records: `docs/implementation/M6_BEAT_ANALYSIS.md` and `docs/implementation/M6_EVIDENCE.md`.
 
+## M7 Implementation Result — PASS
+- Branch: `impl-m7-workspace-registry`
+- Added AppKernel-owned, Qt-agnostic `WorkspaceRegistry` and `WorkspaceBundle` route composition boundary.
+- FoundationShell is now the single direct `workspace_changed` subscriber and routes activation through WorkspaceRegistry.
+- Home, Media, Album, Timeline, Visual, Template, Spectrum, AI Agent, and Render register their existing production surfaces through the registry in canonical order.
+- Feature modules no longer access private `workspace_stack._index`; capture tooling also uses the public registry boundary.
+- Existing route methods remain transitional adapters for M7 parity and are dispatched by the registry instead of owning signal subscriptions.
+- Render remains the final migrated workspace route; the later STEP11 integration observer is not a workspace route owner.
+- Full production route navigation remains read-only against authoritative ProjectDocument.
+- No M8 bridge retirement, UI redesign, schema bump, dependency, compiler, or release work was performed.
+- GitHub Actions run `37597489445`: 63 M0–M7 contracts passed (4 skipped), 42 nine-route functional UI tests passed, 13 production navigation/persistence tests passed, 23 responsive/shell regressions passed, 2 long-album structural stress tests passed, and real-FFmpeg M7 job PASS with 2 tests.
+- Detailed records: `docs/implementation/M7_WORKSPACE_REGISTRY.md` and `docs/implementation/M7_EVIDENCE.md`.
+
 ## Next Work
-- M7: Workspace Registry only.
-- Re-read STEP 03 and STEP 09 canonical decisions before implementation.
-- Replace runtime workspace/patch ownership one route at a time; preserve all 9 production routes and current UI/workflow.
-- Keep ProjectDocument/EditorSession and the M2–M6 service boundaries authoritative.
-- Do not proceed to M8 Legacy Bridge Retirement until M7 gate PASS.
+- M8: Legacy Bridge Retirement only.
+- Re-read STEP 03 legacy-retirement rules and M7 ownership evidence before deleting or bypassing any patch/bridge.
+- Retire only legacy code that is no longer a production owner and has replacement parity evidence.
+- Preserve all nine routes, ProjectDocument/EditorSession authority, UI/workflow baseline, and M2–M7 service boundaries.
+- Do not proceed to M9 Consolidation until M8 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -164,4 +177,5 @@ Implementation is active. M0/T1 through M6 are completed and gate-protected.
 - M4 RenderEngine Facade: PASS
 - M5 MediaProbeService / PreviewEngine / CacheManager: PASS
 - M6 BeatAnalysisService: PASS
-- Next operational action: M7 Workspace Registry only; then report gate before M8.
+- M7 WorkspaceRegistry: PASS
+- Next operational action: M8 Legacy Bridge Retirement only; then report gate before M9.
