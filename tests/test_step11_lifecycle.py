@@ -12,11 +12,16 @@ from full_album_maker.integration_lifecycle_step11 import (
     DebouncedAutosaveCoordinator,
     IntegrationRecoveryStore,
     RecoveryEnvelope,
+    RecoverySessionLease,
+    recovery_path_for_session,
     extract_project_document_from_saved_json,
     request_from_document,
     verify_persisted_document,
 )
 from full_album_maker.project_repository import save_project_document
+import full_album_maker.integration_feature_step11 as integration_feature
+from full_album_maker.integration_core_step11 import project_token
+from full_album_maker.project_persistence import ProjectPersistence
 
 
 def _document(tmp_path: Path) -> ProjectDocument:
@@ -142,3 +147,131 @@ def test_legacy_envelope_verification_uses_embedded_project_document(tmp_path: P
 
     changed = _next_revision(doc)
     assert verify_persisted_document(path, changed) is False
+
+
+
+def test_live_sessions_keep_independent_recovery_files(tmp_path: Path) -> None:
+    root = tmp_path / "recovery"
+    first = RecoverySessionLease(root)
+    second = RecoverySessionLease(root)
+    first.start()
+    second.start()
+    try:
+        canonical_path = tmp_path / "project.json"
+        base = _document(tmp_path)
+        token = project_token(base, str(canonical_path))
+
+        first_doc = _next_revision(base)
+        second_doc = first_doc.clone()
+        second_doc.revision += 1
+        second_doc.album_title = "second-session"
+        second_doc.validate()
+
+        first_path = recovery_path_for_session(root, token, first.session_id)
+        second_path = recovery_path_for_session(root, token, second.session_id)
+        store_first = IntegrationRecoveryStore(first_path)
+        store_second = IntegrationRecoveryStore(second_path)
+
+        store_first.write(
+            request_from_document(
+                first_doc,
+                project_path=str(canonical_path),
+                owner_session_id=first.session_id,
+            )
+        )
+        store_second.write(
+            request_from_document(
+                second_doc,
+                project_path=str(canonical_path),
+                owner_session_id=second.session_id,
+            )
+        )
+
+        assert first_path != second_path
+        assert first_path.is_file() and second_path.is_file()
+        assert store_first.load_strict().owner_session_id == first.session_id
+        assert store_second.load_strict().owner_session_id == second.session_id
+        assert first.session_alive(second.session_id) is True
+        assert second.session_alive(first.session_id) is True
+    finally:
+        first.close()
+        second.close()
+
+
+def test_live_instance_recovery_is_not_offered_or_deleted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(integration_feature, "data_dir", lambda: tmp_path)
+    monkeypatch.setenv("FAM_STEP11_NO_RECOVERY_PROMPT", "1")
+    root = tmp_path / "recovery" / "step11"
+
+    owner = RecoverySessionLease(root)
+    observer = RecoverySessionLease(root)
+    owner.start()
+    observer.start()
+    try:
+        canonical_path = tmp_path / "canonical.json"
+        canonical = _document(tmp_path)
+        canonical.revision = 5
+        canonical.validate()
+        token = project_token(canonical, str(canonical_path))
+
+        newer = canonical.clone()
+        newer.revision = 6
+        newer.album_title = "live-owner-unsaved"
+        newer.validate()
+        recovery_path = recovery_path_for_session(root, token, owner.session_id)
+        ProjectPersistence().write_recovery(
+            recovery_path,
+            request_from_document(
+                newer,
+                project_path=str(canonical_path),
+                owner_session_id=owner.session_id,
+            ),
+        )
+
+        class _Status:
+            def __init__(self):
+                self.calls = []
+
+            def set_status(self, **kwargs):
+                self.calls.append(kwargs)
+
+        class _Fake:
+            pass
+
+        fake = _Fake()
+        fake._s11_project_token = token
+        fake._s11_recovery_session = observer
+        fake._s11_project_path = lambda: str(canonical_path)
+        fake.foundation_state = _Status()
+
+        assert integration_feature._maybe_offer_recovery(fake, canonical) is False
+        assert recovery_path.is_file()
+        assert fake.foundation_state.calls == []
+
+        owner.close()
+
+        assert integration_feature._maybe_offer_recovery(fake, canonical) is True
+        assert recovery_path.is_file()
+        assert fake.foundation_state.calls[-1]["save"][0] == "Recovery tersedia"
+    finally:
+        owner.close()
+        observer.close()
+
+
+def test_closed_recovery_session_is_detected_as_dead(tmp_path: Path) -> None:
+    root = tmp_path / "recovery"
+    owner = RecoverySessionLease(root)
+    observer = RecoverySessionLease(root)
+    owner.start()
+    observer.start()
+    owner_id = owner.session_id
+    try:
+        assert observer.session_alive(owner_id) is True
+        owner.close()
+        assert observer.session_alive(owner_id) is False
+    finally:
+        owner.close()
+        observer.close()
