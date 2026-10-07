@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
+import json
 import math
 from pathlib import Path
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from .editor_models import (
     CanvasSettings,
@@ -59,6 +62,18 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
     if detect_project_payload(data) != "project_v1":
         raise MigrationError("Payload bukan Project v1 yang dapat dimigrasikan.")
 
+    canonical_legacy = json.dumps(
+        data,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    migration_seed = hashlib.sha256(canonical_legacy.encode("utf-8")).hexdigest()
+
+    def migrated_id(*parts: object) -> str:
+        key = ":".join(str(part) for part in parts)
+        return str(uuid5(NAMESPACE_URL, f"full-album-maker:v1:{migration_seed}:{key}"))
+
     settings = data.get("settings", {}) or {}
     if not isinstance(settings, dict):
         raise MigrationError("Setting proyek legacy tidak valid.")
@@ -69,9 +84,20 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
     except (TypeError, ValueError) as exc:
         raise MigrationError("Resolusi/FPS legacy tidak valid.") from exc
 
-    visual_track = Track(name="Elemen Visual", kind="visual", order=0)
-    audio_track = Track(name="Audio Master", kind="audio", order=1)
+    visual_track = Track(
+        track_id=migrated_id("track", "visual"),
+        name="Elemen Visual",
+        kind="visual",
+        order=0,
+    )
+    audio_track = Track(
+        track_id=migrated_id("track", "audio"),
+        name="Audio Master",
+        kind="audio",
+        order=1,
+    )
     doc = ProjectDocument(
+        project_id=migrated_id("project"),
         name=name,
         canvas=CanvasSettings(width=width, height=height, fps_num=fps, fps_den=1),
         playlist=Playlist(mode="packed", entries=[]),
@@ -102,6 +128,7 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
             return asset_by_kind_path[key]
         metadata = {k: deepcopy(v) for k, v in raw.items() if k not in {"path", "duration"}}
         asset = MediaAsset(
+            asset_id=migrated_id("asset", kind, _path_key(path)),
             kind=kind,
             locator=path,
             source_duration_tick=_finite_duration(raw.get("duration", 0.0), f"{kind} #{index}"),
@@ -135,7 +162,12 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
         existing = asset_by_kind_path.get(key)
         if existing:
             return existing
-        asset = MediaAsset(kind=kind, locator=path, original_name=Path(path).name)
+        asset = MediaAsset(
+            asset_id=migrated_id("asset", kind, _path_key(path)),
+            kind=kind,
+            locator=path,
+            original_name=Path(path).name,
+        )
         doc.media.append(asset)
         asset_by_kind_path[key] = asset.asset_id
         return asset.asset_id
@@ -158,12 +190,13 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
     else:
         selected_asset_ids = list(audio_asset_ids)
 
-    for asset_id in selected_asset_ids:
+    for song_index, asset_id in enumerate(selected_asset_ids, 1):
         raw = audio_raw_by_asset.get(asset_id, {})
         asset = next(item for item in doc.media if item.asset_id == asset_id)
         source_out = asset.source_duration_tick or None
         doc.playlist.entries.append(
             SongInstance(
+                song_id=migrated_id("song", song_index, asset_id),
                 asset_id=asset_id,
                 display_title=str(raw.get("display_title", "") or ""),
                 display_artist=str(raw.get("display_artist", "") or ""),
@@ -196,6 +229,7 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
     if visual_asset_refs:
         doc.layers.append(
             Layer(
+                layer_id=migrated_id("layer", "background"),
                 track_id=visual_track.track_id,
                 type="background",
                 name="Visual Legacy",
@@ -219,6 +253,7 @@ def migrate_project_v1(data: dict[str, Any], *, name: str = "Proyek Migrasi") ->
     if title_mode != "off":
         doc.layers.append(
             Layer(
+                layer_id=migrated_id("layer", "song_title"),
                 track_id=visual_track.track_id,
                 type="song_title",
                 name="Judul Lagu Legacy",
