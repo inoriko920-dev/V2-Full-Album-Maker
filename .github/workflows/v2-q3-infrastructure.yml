@@ -35,6 +35,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
           python -m pip install -e .
+      - name: Record Q3 Linux FFmpeg scope
+        run: |
+          ffmpeg -version | head -n 1
+          echo "Q3 Linux matrix excludes tests/test_editor_v2_s12_performance.py::test_real_ffmpeg_accepts_external_filter_script."
+          echo "That test explicitly targets the pinned Windows FFmpeg '-/filter_complex' capability and remains required for Q4 Windows Artifact validation."
       - name: Q3 real FFmpeg infrastructure matrix
         timeout-minutes: 10
         run: |
@@ -42,7 +47,6 @@ jobs:
             tests/test_v2_media_services.py::test_real_ffmpeg_media_probe_service_audio_duration \
             tests/test_v2_beat_analysis.py::test_real_ffmpeg_detects_pulses_without_mutating_master_audio \
             tests/test_v2_beat_analysis.py::test_real_ffmpeg_silence_stays_non_reactive \
-            tests/test_editor_v2_s12_performance.py::test_real_ffmpeg_accepts_external_filter_script \
             tests/test_step10_render_real_ffmpeg.py \
             tests/test_editor_v2_render.py::test_real_ffmpeg_two_song_background_text_and_accurate_preview \
             tests/test_editor_v2_s05_spectrum.py::test_real_ffmpeg_all_release_spectrum_styles \
