@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -8,13 +9,7 @@ from full_album_maker.editor_models import MediaAsset, ProjectDocument, SongInst
 from full_album_maker.render_service_v2 import EditorRenderService, RenderErrorV2
 
 
-FFMPEG_RELEASE_TAG = "autobuild-2026-10-03-18-14"
-FFMPEG_ASSET_NAME = "ffmpeg-N-127142-g12b7b9891b-win64-gpl.zip"
-FFMPEG_SHA256 = "a885f564dee2b60f69ab866c6c89b96ae531fc2ee1f24ff8b5b1a6d29960a96b"
-FFMPEG_URL = (
-    "https://github.com/BtbN/FFmpeg-Builds/releases/download/"
-    f"{FFMPEG_RELEASE_TAG}/{FFMPEG_ASSET_NAME}"
-)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class _MaterializingRunner:
@@ -72,18 +67,29 @@ def test_render_service_rejects_misleading_non_mp4_suffix(tmp_path: Path):
         ).render(document, str(tmp_path / "Album Final.avi"))
 
 
-def test_local_portable_build_keeps_s12_release_contract():
-    root = Path(__file__).resolve().parents[1]
-    script = (root / "build" / "build_portable.ps1").read_text(encoding="utf-8")
+def test_local_portable_build_uses_canonical_release_manifest_contract():
+    script = (ROOT / "build" / "build_portable.ps1").read_text(encoding="utf-8")
+    manifest = json.loads((ROOT / "build" / "release_manifest.json").read_text(encoding="utf-8"))
+
+    assert manifest["schema_version"] == 1
+    assert manifest["target_stable_version"] == "2.0.0"
+    assert manifest["python"]["version"] == "3.12.10"
+    assert manifest["python"]["pip"] == "26.2.1"
+
+    ffmpeg = manifest["ffmpeg"]
+    assert ffmpeg["release_tag"] == "autobuild-2026-10-03-18-14"
+    assert ffmpeg["asset_name"] == "ffmpeg-N-127142-g12b7b9891b-win64-gpl.zip"
+    assert ffmpeg["sha256"] == "a885f564dee2b60f69ab866c6c89b96ae531fc2ee1f24ff8b5b1a6d29960a96b"
+    assert "/releases/download/latest/" not in ffmpeg["download_url"]
 
     required_fragments = (
-        "pip==26.2.1",
+        "build\\release_manifest.json",
+        "target_stable_version",
+        "Manifest.ffmpeg.download_url",
+        "Manifest.ffmpeg.sha256",
+        "Manifest.font.commit",
         "build/requirements-windows.lock",
-        FFMPEG_RELEASE_TAG,
-        FFMPEG_ASSET_NAME,
-        FFMPEG_SHA256,
-        FFMPEG_URL,
-        "23e54b51ddffbc7713c583748e3bd86f62b1fa4a",
+        'python -m pip install "pip==$PipVersion"',
         "NotoSans.ttf",
         "write_release_capabilities.py",
         "--portable-smoke",
@@ -92,12 +98,14 @@ def test_local_portable_build_keeps_s12_release_contract():
         "Get-Command python",
         "Get-Command ffmpeg",
         "output_streams",
-        "SHA256SUMS.txt",
+        "ChecksumFileName",
+        "RELEASE_MANIFEST.json",
     )
     for fragment in required_fragments:
         assert fragment in script
 
     assert "/releases/download/latest/" not in script
-    assert "595476894" not in script
     assert "pip install --upgrade pip" not in script
     assert "pip install -r requirements-dev.txt" not in script
+    assert ffmpeg["download_url"] not in script
+    assert ffmpeg["sha256"] not in script
