@@ -12,6 +12,7 @@ from . import visual_feature as visual_feature_module
 from .media import probe_duration
 from .media_probe_service import (
     MediaProbeService,
+    SourceFingerprint,
     current_media_probe_service,
 )
 from .project import MediaItem
@@ -64,6 +65,18 @@ def _target_paths(window, kind: str) -> set[str]:
     return {_path_key(item.path) for item in items}
 
 
+def _item_source_fingerprint(item: MediaItem) -> SourceFingerprint | None:
+    value = getattr(item, "_source_fingerprint", None)
+    return value if isinstance(value, SourceFingerprint) else None
+
+
+def _item_source_still_current(item: MediaItem) -> bool:
+    fingerprint = _item_source_fingerprint(item)
+    if fingerprint is None:
+        return False
+    return fingerprint.matches_path(item.path)
+
+
 def _probe_one(
     kind: str,
     path: str,
@@ -73,7 +86,9 @@ def _probe_one(
     result = probe_service.probe(path, kind)
 
     if kind == "video":
-        return MediaItem(path=path, duration=float(result.duration_seconds or 0.0))
+        item = MediaItem(path=path, duration=float(result.duration_seconds or 0.0))
+        setattr(item, "_source_fingerprint", result.fingerprint)
+        return item
 
     if kind == "audio":
         item = MediaItem(path=path, duration=float(result.duration_seconds or 0.0))
@@ -82,6 +97,7 @@ def _probe_one(
         if result.artist:
             setattr(item, "display_artist", result.artist)
         setattr(item, "metadata_probed", True)
+        setattr(item, "_source_fingerprint", result.fingerprint)
         return item
 
     if kind == "image":
@@ -90,6 +106,7 @@ def _probe_one(
             setattr(item, "width", int(result.width))
         if result.height is not None:
             setattr(item, "height", int(result.height))
+        setattr(item, "_source_fingerprint", result.fingerprint)
         return item
 
     raise ValueError(f"Jenis media tidak dikenal: {kind}")
@@ -178,7 +195,11 @@ def _finish_import(self, payload: dict[str, Any]) -> None:
 
     existing = _target_paths(self, kind)
     accepted: list[MediaItem] = []
+    stale_sources: list[str] = []
     for item in items:
+        if not _item_source_still_current(item):
+            stale_sources.append(Path(item.path).name or item.path)
+            continue
         key = _path_key(item.path)
         if key in existing:
             continue
@@ -212,6 +233,20 @@ def _finish_import(self, payload: dict[str, Any]) -> None:
         )
     else:
         self.log.appendPlainText(f"Impor {kind} selesai tanpa file baru.")
+
+    if stale_sources:
+        preview = "\n".join(
+            f"• {name}: source berubah setelah probe; impor dibatalkan"
+            for name in stale_sources[:8]
+        )
+        more = (
+            f"\n• …dan {len(stale_sources) - 8} source lain"
+            if len(stale_sources) > 8 else ""
+        )
+        self.log.appendPlainText(
+            f"{len(stale_sources)} file tidak diadopsi karena source berubah:\n"
+            f"{preview}{more}"
+        )
 
     if errors:
         preview = "\n".join(f"• {message}" for message in errors[:8])

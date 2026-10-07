@@ -20,7 +20,7 @@ def _kind_items(w,kind):
 def _existing(w): return {canonical_path_key(a.path) for a in build_project_assets(w.project,visual_mod.images(w.project),None)}
 
 def _init(self,*a,**kw):
-    _originals['init'](self,*a,**kw); self._s03_cancel=threading.Event(); self._s03_jobs=0; self._s03_project=self.project; self._s03_store=MediaSidecarStore(self._foundation_project_path or None); self._s03_index=MediaLibraryIndex(); self._s03_bridge=_Bridge(); self._s03_bridge.progress.connect(self._s03_progress); self._s03_bridge.imported.connect(self._s03_imported); self._s03_bridge.relinked.connect(self._s03_relinked)
+    _originals['init'](self,*a,**kw); self._s03_cancel=threading.Event(); self._s03_jobs=0; self._s03_relink_generation={}; self._s03_project=self.project; self._s03_store=MediaSidecarStore(self._foundation_project_path or None); self._s03_index=MediaLibraryIndex(); self._s03_bridge=_Bridge(); self._s03_bridge.progress.connect(self._s03_progress); self._s03_bridge.imported.connect(self._s03_imported); self._s03_bridge.relinked.connect(self._s03_relinked)
     self.media_workspace=MediaWorkspace()
     lay=self.foundation_shell.context.layout(); self._s03_context_old=[lay.itemAt(i).widget() for i in range(lay.count()) if lay.itemAt(i).widget()]; self.media_context=MediaContextWidget(); self.media_context.hide(); lay.addWidget(self.media_context,1)
     self.media_inspector=MediaInspectorWidget(); self._inspector_router.addWidget(self.media_inspector)
@@ -92,7 +92,12 @@ def _progress(self,p):
 def _imported(self,p):
     self._s03_jobs=max(0,self._s03_jobs-1); self.media_workspace.set_import_progress('',active=False)
     if p.get('project') is not self.project:self.log.appendPlainText('Hasil impor Media diabaikan karena proyek aktif berganti.');self._sync_foundation_state();return
-    accepted=list(p.get('accepted',())); videos=[x for k,x in accepted if k=='video']; audios=[x for k,x in accepted if k=='audio']; photos=[x for k,x in accepted if k=='photo']; self.project.videos.extend(videos); self.project.audios.extend(audios); visual_mod.images(self.project).extend(photos)
+    accepted=[]; stale=[]
+    for kind,item in list(p.get('accepted',())):
+        if not async_mod._item_source_still_current(item):
+            stale.append(Path(item.path).name or item.path); continue
+        accepted.append((kind,item))
+    videos=[x for k,x in accepted if k=='video']; audios=[x for k,x in accepted if k=='audio']; photos=[x for k,x in accepted if k=='photo']; self.project.videos.extend(videos); self.project.audios.extend(audios); visual_mod.images(self.project).extend(photos)
     if videos or photos:
         order=getattr(self.project,'_visual_order',None)
         if not isinstance(order,list):order=[];setattr(self.project,'_visual_order',order)
@@ -101,6 +106,7 @@ def _imported(self,p):
             if canonical_path_key(item.path) not in known:order.append(item.path);known.add(canonical_path_key(item.path))
     if accepted:self.invalidate_timeline();self.log.appendPlainText(f'Impor Media selesai: {len(accepted)} file ditambahkan.')
     errors=[str(x) for x in p.get('errors',())]
+    if stale:self.log.appendPlainText(f'{len(stale)} media tidak diadopsi karena source berubah setelah probe:\n'+'\n'.join('• '+x for x in stale[:8]))
     if errors:self.log.appendPlainText(f'{len(errors)} media gagal/ditolak:\n'+'\n'.join('• '+x for x in errors[:8]))
     if p.get('canceled'):self.log.appendPlainText('Impor Media dibatalkan; hasil yang selesai sebelum pembatalan dipertahankan.')
     self.refresh(); self._s03_refresh(False); self._sync_foundation_state()
@@ -131,18 +137,24 @@ def _relink(self,asset_id):
     filt={MediaType.VIDEO:'Video (*.mp4 *.mov *.mkv *.webm *.avi *.m4v *.wmv)',MediaType.AUDIO:'Audio (*.mp3 *.wav *.flac *.m4a *.aac *.ogg *.opus)',MediaType.PHOTO:'Foto (*.jpg *.jpeg *.png *.webp)'}[a.media_type]; path,_=QFileDialog.getOpenFileName(self,f'Relink {a.display_name}',str(Path(a.path).parent),filt)
     if not path:return
     if media_type_for_path(path)!=a.media_type:QMessageBox.warning(self,'Relink Media','Jenis media pengganti harus sama.');return
-    project=self.project
+    project=self.project; old_path=str(a.path); generation=int(self._s03_relink_generation.get(asset_id,0))+1; self._s03_relink_generation[asset_id]=generation
     def work():
         try:item=async_mod._probe_one('image' if a.media_type==MediaType.PHOTO else a.media_type.value,path,getattr(self,'_m5_media_probe_service',None));err=''
         except Exception as exc:item=None;err=str(exc)
-        self._s03_bridge.relinked.emit({'project':project,'asset_id':asset_id,'old':a.path,'new':path,'kind':a.media_type.value,'item':item,'error':err})
+        self._s03_bridge.relinked.emit({'project':project,'asset_id':asset_id,'old':old_path,'new':path,'kind':a.media_type.value,'item':item,'error':err,'generation':generation})
     threading.Thread(target=work,daemon=True,name='fam-step03-relink').start()
 def _relinked(self,p):
     if p.get('project') is not self.project:return
+    asset_id=str(p.get('asset_id','')); generation=int(p.get('generation',0) or 0)
+    if generation!=int(self._s03_relink_generation.get(asset_id,0) or 0):
+        self.log.appendPlainText('Hasil relink lama diabaikan karena ada relink yang lebih baru.');return
     if p.get('error'):QMessageBox.warning(self,'Relink Media',f"Media pengganti tidak valid:\n{p['error']}");return
+    probed=p.get('item')
+    if probed is None or not async_mod._item_source_still_current(probed):
+        QMessageBox.warning(self,'Relink Media','Media pengganti berubah setelah probe. Relink dibatalkan; pilih ulang file.');return
     kind=MediaType(p['kind']); target=next((x for x in _kind_items(self,kind) if canonical_path_key(x.path)==canonical_path_key(p['old'])),None)
     if target is None:return
-    target.path=p['new']; probed=p['item']
+    target.path=p['new']
     if getattr(self,'timeline_plan',None) is None:target.duration=getattr(probed,'duration',target.duration)
     elif float(getattr(probed,'duration',target.duration) or 0)!=float(getattr(target,'duration',0) or 0):self.log.appendPlainText('Relink selesai; durasi timeline tidak diubah otomatis. Review/rebuild timeline bila diperlukan.')
     for name in ('width','height','fps','container','codec'):
