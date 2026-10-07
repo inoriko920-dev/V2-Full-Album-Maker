@@ -36,6 +36,8 @@ class SourceFingerprint:
     mtime_ns: int | None = None
     semantic_facts: tuple[tuple[str, str], ...] = ()
     full_sha256: str = ""
+    device_id: int | None = None
+    inode: int | None = None
 
     @classmethod
     def capture(cls, path: str | Path) -> "SourceFingerprint":
@@ -46,6 +48,8 @@ class SourceFingerprint:
                 locator=locator,
                 size_bytes=int(stat.st_size),
                 mtime_ns=int(stat.st_mtime_ns),
+                device_id=int(getattr(stat, "st_dev", 0) or 0) or None,
+                inode=int(getattr(stat, "st_ino", 0) or 0) or None,
             )
         except OSError:
             return cls(locator=locator)
@@ -59,6 +63,26 @@ class SourceFingerprint:
         if self.size_bytes is not None and self.mtime_ns is not None:
             return "F1"
         return "F0"
+
+    def same_source_version(self, other: "SourceFingerprint") -> bool:
+        if not isinstance(other, SourceFingerprint):
+            return False
+        if self.locator != other.locator:
+            return False
+        if self.size_bytes != other.size_bytes or self.mtime_ns != other.mtime_ns:
+            return False
+        if (
+            self.device_id is not None
+            and other.device_id is not None
+            and self.device_id != other.device_id
+        ):
+            return False
+        if self.inode is not None and other.inode is not None and self.inode != other.inode:
+            return False
+        return True
+
+    def matches_path(self, path: str | Path) -> bool:
+        return self.same_source_version(SourceFingerprint.capture(path))
 
     def with_semantic(self, facts: Mapping[str, object]) -> "SourceFingerprint":
         normalized = tuple(
@@ -78,6 +102,8 @@ class SourceFingerprint:
             "mtime_ns": self.mtime_ns,
             "semantic": self.semantic_facts,
             "sha256": self.full_sha256,
+            "device_id": self.device_id,
+            "inode": self.inode,
         }
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -159,6 +185,8 @@ class MediaProbeService:
             raise ValueError(f"Jenis media tidak dikenal: {media_kind}")
 
         base = SourceFingerprint.capture(source)
+        if base.size_bytes is None or base.mtime_ns is None:
+            raise FileNotFoundError(f"Source media tidak tersedia: {Path(source).name}")
         duration: float | None = None
         width: int | None = None
         height: int | None = None
@@ -179,7 +207,12 @@ class MediaProbeService:
                 title = str(title or "")
                 artist = str(artist or "")
 
-        fingerprint = base.with_semantic(
+        after = SourceFingerprint.capture(source)
+        if not base.same_source_version(after):
+            raise RuntimeError(
+                f"Source media berubah saat probe: {Path(source).name}"
+            )
+        fingerprint = after.with_semantic(
             {
                 "kind": kind,
                 "duration": "" if duration is None else f"{duration:.9f}",
