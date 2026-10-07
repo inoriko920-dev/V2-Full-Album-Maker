@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
+import sys
 import threading
+import time
 
 import pytest
 
@@ -17,6 +20,7 @@ from full_album_maker.render_center_model_step10 import (
 from full_album_maker.render_executor_step10 import (
     OutputVerification,
     RenderExecutor,
+    Step10ProcessRunner,
     Step10RenderCancelled,
     Step10RenderError,
     apply_encoder_settings,
@@ -255,3 +259,92 @@ def test_ffprobe_verifier_rejects_corrupt_and_accepts_expected_streams(tmp_path:
 
     with pytest.raises(Step10RenderError, match="menolak"):
         verify_output(path, settings=settings, expected_duration_seconds=6.0, ffprobe="ffprobe", run=bad_run)
+
+
+def test_process_runner_cancel_interrupts_silent_process() -> None:
+    runner = Step10ProcessRunner()
+    cancel_event = threading.Event()
+    errors: list[BaseException] = []
+
+    def work() -> None:
+        try:
+            runner.run(
+                (
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import time; time.sleep(30)",
+                ),
+                duration_seconds=30.0,
+                cancel_event=cancel_event,
+            )
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=work, name="test-silent-render-cancel")
+    worker.start()
+    time.sleep(0.25)
+
+    started = time.monotonic()
+    cancel_event.set()
+    worker.join(timeout=5.0)
+    elapsed = time.monotonic() - started
+
+    assert not worker.is_alive()
+    assert elapsed < 4.5
+    assert len(errors) == 1
+    assert isinstance(errors[0], Step10RenderCancelled)
+
+
+def test_process_runner_rejects_pending_cancel_before_spawn(monkeypatch) -> None:
+    cancel_event = threading.Event()
+    cancel_event.set()
+    spawned: list[bool] = []
+
+    def forbidden_popen(*args, **kwargs):
+        spawned.append(True)
+        raise AssertionError("Popen must not run for an already-cancelled render")
+
+    monkeypatch.setattr(
+        "full_album_maker.render_executor_step10.subprocess.Popen",
+        forbidden_popen,
+    )
+
+    with pytest.raises(Step10RenderCancelled, match="sebelum FFmpeg dimulai"):
+        Step10ProcessRunner().run(
+            ("ffmpeg", "-version"),
+            duration_seconds=1.0,
+            cancel_event=cancel_event,
+        )
+
+    assert spawned == []
+
+
+def test_process_runner_terminate_escalates_to_kill() -> None:
+    class StubbornProcess:
+        def __init__(self) -> None:
+            self.terminate_calls = 0
+            self.kill_calls = 0
+            self.killed = False
+
+        def poll(self):
+            return 1 if self.killed else None
+
+        def terminate(self):
+            self.terminate_calls += 1
+
+        def wait(self, timeout=None):
+            if self.killed:
+                return 1
+            raise subprocess.TimeoutExpired(cmd="ffmpeg", timeout=timeout)
+
+        def kill(self):
+            self.kill_calls += 1
+            self.killed = True
+
+    process = StubbornProcess()
+    Step10ProcessRunner._terminate_process(process, graceful_timeout=0.01)
+
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert process.poll() is not None
