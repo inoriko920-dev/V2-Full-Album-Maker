@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import shutil
 from typing import Iterable
+from uuid import uuid4
 
 from .atomic_io import atomic_write_text
 from .paths import data_dir
@@ -167,6 +171,9 @@ def job_from_dict(value: dict) -> RenderJob:
 class RenderQueueStore:
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path is not None else data_dir() / "render" / "queue_v1.json"
+        self.last_recovery_warning = ""
+        self.quarantined_path: Path | None = None
+        self.persistence_blocked = False
 
     def load(self) -> list[RenderJob]:
         if not self.path.exists():
