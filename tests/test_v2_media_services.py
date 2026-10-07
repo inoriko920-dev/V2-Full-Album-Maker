@@ -293,7 +293,7 @@ def test_media_preview_cache_close_suppresses_inflight_completion(tmp_path: Path
     cache.jobs_changed.connect(job_updates.append)
 
     assert cache.request(asset) is True
-    assert entered.wait(timeout=2)
+    assert entered.wait(timeout=5), "preview worker tidak mulai dalam batas fixture Windows"
     assert cache.job_count == 1
 
     assert cache.close(timeout=0.01) is False
