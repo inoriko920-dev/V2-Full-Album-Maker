@@ -88,11 +88,22 @@ Implementation is now allowed, but has **not started yet**.
 - No current service implementation or ownership was replaced.
 - GitHub Actions run `37583919255`: Q0 compile PASS, 14 contract tests PASS, Q1 nine-workspace navigation PASS, Q1 authoritative-state/canonical-save shell PASS.
 
+## M2 Implementation Result — PASS
+- Branch: `impl-m2-task-lifecycle`
+- Added typed lifecycle AppError/AppResult primitives.
+- Added TaskToken/TaskScope/TaskSupervisor/TaskHandle.
+- AppKernel owns one central TaskSupervisor and closes it boundedly on normal return or exception.
+- Generation invalidation/cancellation/stale-result contracts are explicit.
+- Seven legacy async owners are characterized in `task_owner_inventory.py`.
+- Existing legacy async owner modules were not migrated or edited.
+- GitHub Actions run `37585385248`: 27 M0/M1/M2 contracts PASS, 7 legacy async stale/cancel tests PASS, 3 render/close lifecycle tests PASS, 9-workspace characterization PASS, authoritative-state/canonical-save shell PASS.
+- H3 ProcessSupervisor and H4 ApplicationLifecycleService remain future hardening work; they were not silently implemented here.
+
 ## Next Work
-- M2: Task Lifecycle only.
-- Introduce TaskSupervisor/TaskScope additively and characterize current owners first.
-- Do not migrate persistence/render/preview/workspaces/AI ownership in M2 unless explicitly within the approved lifecycle boundary.
-- Do not proceed to M3 until M2 gate PASS.
+- M3: Persistence only.
+- Wrap existing proven save/load/recovery behavior behind ProjectPersistence before replacing direct paths.
+- Keep canonical Save atomic and recovery separate.
+- Do not proceed to M4 until M3 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -100,4 +111,5 @@ Implementation is now allowed, but has **not started yet**.
 - Pre-coding documentation gate: PASS
 - M0/T1 FeatureParityRegistry + characterization: PASS
 - M1 AppKernel/CompositionRoot: PASS
-- Next operational action: M2 Task Lifecycle only; then report gate before M3.
+- M2 Task Lifecycle/TaskSupervisor/TaskScope: PASS
+- Next operational action: M3 Persistence only; then report gate before M4.

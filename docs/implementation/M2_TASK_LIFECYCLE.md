@@ -1,6 +1,6 @@
 # M2 — Task Lifecycle / TaskSupervisor / TaskScope
 
-Status: **IMPLEMENTED — validation pending**
+Status: **PASS — central task lifecycle implemented and validated**
 
 ## Scope
 
@@ -191,3 +191,27 @@ the approved M0→M9 architecture order.
 However, STEP 04 H3/H4 lifecycle hardening may need to be completed as a bounded
 precondition before a later boundary uses subprocess/application-close ownership.
 Do not silently combine those with M3 in this M2 slice.
+
+
+## Validation Evidence
+
+Validated M2 candidate:
+- commit: `e69f426ec53ca1f2e0e2164758ddf63a8db36bb3`
+- GitHub Actions run: `37585385248`
+- job: `m2-task-lifecycle`
+- Q0 compile: PASS
+- M0 + M1 + M2 contracts: **27 passed**
+- legacy async-import + AI stale/cancel characterization: **7 passed**
+- render/close lifecycle characterization: **3 passed**
+- nine-workspace read-only launch characterization: **1 passed**
+- authoritative-state/canonical-save production shell: **1 passed**
+- job conclusion: **success**
+
+Two earlier workflow attempts failed before product assertions because a later
+`test_async_import.py` test was selected in isolation even though that baseline
+file initializes `QApplication` in its first test. The workflow was corrected to
+run the baseline file as designed. No legacy async-import source/test was modified
+to obtain PASS.
+
+The evidence/status commit that records this PASS must rerun the same workflow on
+its own final head before M3 begins.

@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M1 COMPOSITION ROOT
+IMPLEMENTATION — M2 TASK LIFECYCLE
 
 ## Current STEP
-M1 — AppKernel / CompositionRoot — PASS
+M2 — Task Lifecycle / TaskSupervisor / TaskScope — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,29 +37,32 @@ M1 — AppKernel / CompositionRoot — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1 and M1 are implemented and validated.
+M0/T1, M1, and M2 are implemented and validated.
 
-M1 result:
-- one explicit `AppKernel / CompositionRoot` launch boundary exists;
-- current GUI and portable-smoke implementations are wrapped by `LegacyRuntimeAdapter`;
-- `main.py` routes launch through the kernel after the existing installer chain;
-- FeatureParityRegistry is validated when the composition root builds;
-- ProjectDocument + EditorController/EditorSession remain authoritative;
-- no service ownership was migrated and no legacy installer was removed/reordered.
+M2 result:
+- typed lifecycle `AppError/AppResult` primitives added as STEP04 H1 prerequisite;
+- central `TaskToken / TaskScope / TaskSupervisor / TaskHandle` boundary added;
+- AppKernel now owns exactly one central TaskSupervisor and closes it in `finally`;
+- scope generation invalidation cancels old tokens and rejects stale result use;
+- cooperative cancellation and bounded close are explicit;
+- non-cooperative Python threads are reported as unfinished instead of blocking forever;
+- seven existing async/task owners are recorded in a machine-readable inventory;
+- no legacy async owner implementation was migrated or edited.
 
-Validated on Actions run `37583919255`: Q0 compile PASS, 14 contract tests PASS, Q1 nine-workspace navigation PASS, Q1 authoritative-state/canonical-save production shell PASS.
+Validated on Actions run `37585385248`: Q0 compile PASS, 27 M0/M1/M2 contract tests PASS, 7 legacy async stale/cancel tests PASS, 3 render/close lifecycle tests PASS, 1 nine-workspace navigation test PASS, and 1 authoritative-state/canonical-save production shell test PASS.
 
-No UI redesign, dependency, project schema, renderer, persistence, AI, workspace ownership, or M2 lifecycle migration was performed.
+H3 ProcessSupervisor and H4 ApplicationLifecycleService are **not implemented in this slice**. No persistence, RenderEngine, preview/cache, workspace, AI ownership, schema, dependency, UI, or release migration was performed.
 
 ## Next Operational Step
-M1 is PASS. On the next explicit implementation turn:
-1. Start **M2 — Task Lifecycle** only.
-2. Introduce the central TaskSupervisor/TaskScope boundary additively.
-3. Characterize current async/process owners before routing any owner through M2.
-4. Do not migrate persistence, render orchestration, preview/cache, workspace ownership, or AI provider ownership yet.
-5. Preserve M0 FeatureParityRegistry and M1 AppKernel boundaries.
-6. Run focused Q0/Q1 lifecycle/cancel/close/stale-result evidence before reporting M2 PASS.
-7. Do not proceed to M3 in the same turn unless explicitly instructed otherwise.
+M2 is PASS. On the next explicit implementation turn:
+1. Start **M3 — Persistence** only, following the approved M0→M9 order.
+2. Keep ProjectDocument authoritative and legacy Project compatibility-only.
+3. Introduce/wrap ProjectPersistence behind existing proven save/load behavior before replacing any direct path.
+4. Preserve atomic committed snapshot → stage → semantic verification → atomic publish.
+5. Preserve recovery as separate from canonical Save.
+6. Do not introduce ProcessSupervisor/render migration, PreviewEngine migration, WorkspaceRegistry migration, or UI redesign in M3.
+7. Run focused roundtrip/save-failure/recovery Q0/Q1 evidence before reporting M3 PASS.
+8. Do not proceed to M4 in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.
