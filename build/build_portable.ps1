@@ -9,42 +9,57 @@ function Assert-NativeSuccess {
     }
 }
 
+$ManifestPath = Join-Path $Root "build\release_manifest.json"
+if (-not (Test-Path $ManifestPath)) {
+    throw "Canonical release manifest tidak ditemukan: $ManifestPath"
+}
+$Manifest = Get-Content $ManifestPath -Raw | ConvertFrom-Json
+if ($Manifest.schema_version -ne 1) {
+    throw "release_manifest.json schema_version tidak didukung: $($Manifest.schema_version)"
+}
+
 $Version = python -c "import sys; sys.path.insert(0, 'src'); import full_album_maker; print(full_album_maker.__version__)"
 Assert-NativeSuccess "Baca versi aplikasi"
 $Version = $Version.Trim()
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Versi release harus semantic version stabil, contoh 1.0.0. Ditemukan: $Version"
+    throw "Versi candidate harus semantic version stabil, contoh 2.0.0. Ditemukan: $Version"
 }
-$ReleaseZipName = "Full-Album-Maker-v$Version-Windows-Portable.zip"
+if ($Version -ne [string]$Manifest.target_stable_version) {
+    throw "Versi aplikasi $Version tidak sama dengan release manifest $($Manifest.target_stable_version)."
+}
 
-# Keep the local release path aligned with CI. A developer running this script
-# should get the same dependency family, FFmpeg digest, font fallback, capability
-# report, checksum, and extracted-ZIP smoke contract as the GitHub Actions artifact.
-python -m pip install pip==26.2.1
+$Pyproject = Get-Content (Join-Path $Root "pyproject.toml") -Raw
+if ($Pyproject -notmatch ('version\s*=\s*"' + [regex]::Escape($Version) + '"')) {
+    throw "pyproject.toml tidak konsisten dengan versi candidate $Version."
+}
+
+$ReleaseZipName = ([string]$Manifest.artifact.zip_pattern).Replace("{version}", $Version)
+$ChecksumFileName = [string]$Manifest.artifact.checksum_file
+$PipVersion = [string]$Manifest.python.pip
+
+python -m pip install "pip==$PipVersion"
 Assert-NativeSuccess "Pin pip"
 python -m pip install -r build/requirements-windows.lock
 Assert-NativeSuccess "Install dependency Python terkunci"
 
-# BtbN Auto-Build autobuild-2026-10-03-18-14, master N-127142-g12b7b9891b.
-# Pin the dated release URL and SHA-256. Never use the mutable /latest/ alias
-# for release QA because latest assets can be replaced and old asset IDs removed.
-$FfmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-03-18-14/ffmpeg-N-127142-g12b7b9891b-win64-gpl.zip"
-$FfmpegSha256 = "a885f564dee2b60f69ab866c6c89b96ae531fc2ee1f24ff8b5b1a6d29960a96b"
-$FfmpegHeaders = @{
-    "User-Agent" = "Full-Album-Maker-Build"
-}
+$FfmpegUrl = [string]$Manifest.ffmpeg.download_url
+$FfmpegSha256 = ([string]$Manifest.ffmpeg.sha256).ToLowerInvariant()
+$FfmpegHeaders = @{ "User-Agent" = "Full-Album-Maker-Build" }
+
 if (Test-Path ffmpeg.zip) { Remove-Item ffmpeg.zip -Force }
 if (Test-Path ffmpeg_unpack) { Remove-Item ffmpeg_unpack -Recurse -Force }
 Invoke-WebRequest -Uri $FfmpegUrl -Headers $FfmpegHeaders -OutFile ffmpeg.zip
 $ActualFfmpegSha = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($ActualFfmpegSha -ne $FfmpegSha256) {
-    throw "Digest FFmpeg berubah. Expected $FfmpegSha256, got $ActualFfmpegSha. Update pin secara eksplisit."
+    throw "Digest FFmpeg berubah. Expected $FfmpegSha256, got $ActualFfmpegSha."
 }
 Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_unpack
 
 $Ffmpeg = Get-ChildItem ffmpeg_unpack -Recurse -Filter ffmpeg.exe | Select-Object -First 1
 $Ffprobe = Get-ChildItem ffmpeg_unpack -Recurse -Filter ffprobe.exe | Select-Object -First 1
-if (-not $Ffmpeg -or -not $Ffprobe) { throw "ffmpeg.exe atau ffprobe.exe tidak ditemukan." }
+if (-not $Ffmpeg -or -not $Ffprobe) {
+    throw "ffmpeg.exe atau ffprobe.exe tidak ditemukan."
+}
 
 New-Item -ItemType Directory -Force "$Root\tools\ffmpeg" | Out-Null
 Copy-Item $Ffmpeg.FullName "$Root\tools\ffmpeg\ffmpeg.exe" -Force
@@ -59,7 +74,7 @@ Assert-NativeSuccess "Pemeriksaan encoder FFmpeg"
 if ($Encoders -notmatch "libx264") { throw "FFmpeg build tidak memiliki libx264." }
 if ($Encoders -notmatch "libx265") { throw "FFmpeg build tidak memiliki libx265." }
 
-$FontCommit = "23e54b51ddffbc7713c583748e3bd86f62b1fa4a"
+$FontCommit = [string]$Manifest.font.commit
 New-Item -ItemType Directory -Force "$Root\assets\fonts" | Out-Null
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/google/fonts/$FontCommit/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf" -OutFile "$Root\assets\fonts\NotoSans.ttf"
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/google/fonts/$FontCommit/ofl/notosans/OFL.txt" -OutFile "$Root\assets\fonts\NotoSans-OFL.txt"
@@ -80,11 +95,14 @@ $App = "$Root\dist\Full Album Maker"
 if (-not (Test-Path "$App\Full Album Maker.exe")) {
     throw "Build PyInstaller selesai tanpa menghasilkan Full Album Maker.exe."
 }
+
 New-Item -ItemType Directory -Force "$App\tools\ffmpeg" | Out-Null
 Copy-Item "$Root\tools\ffmpeg\ffmpeg.exe" "$App\tools\ffmpeg\ffmpeg.exe" -Force
 Copy-Item "$Root\tools\ffmpeg\ffprobe.exe" "$App\tools\ffmpeg\ffprobe.exe" -Force
 Copy-Item "$Root\LICENSE" "$App\LICENSE.txt" -Force
 Copy-Item "$Root\THIRD_PARTY_NOTICES.md" "$App\THIRD_PARTY_NOTICES.md" -Force
+Copy-Item "$ManifestPath" "$App\RELEASE_MANIFEST.json" -Force
+
 New-Item -ItemType Directory -Force "$App\assets\fonts" | Out-Null
 Copy-Item "$Root\assets\logo.svg" "$App\assets\logo.svg" -Force
 Copy-Item "$Root\assets\fonts\fonts.conf" "$App\assets\fonts\fonts.conf" -Force
@@ -99,6 +117,8 @@ if ($FfReadme) { Copy-Item $FfReadme.FullName "$App\FFMPEG-README.txt" -Force }
 New-Item -ItemType Directory -Force "$App\data" | Out-Null
 New-Item -ItemType Directory -Force "$App\temp" | Out-Null
 New-Item -ItemType Directory -Force "$App\output" | Out-Null
+
+$env:FAM_RELEASE_CANDIDATE_SHA = if ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { "local" }
 python "$Root\build\write_release_capabilities.py" --root "$App"
 Assert-NativeSuccess "Tulis CAPABILITIES.json"
 
@@ -108,11 +128,11 @@ Compress-Archive -Path "$App" -DestinationPath $Zip
 if (-not (Test-Path $Zip)) { throw "Portable ZIP tidak berhasil dibuat." }
 
 $ZipSha256 = (Get-FileHash $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-$ChecksumFile = "$Root\SHA256SUMS.txt"
+$ChecksumFile = "$Root\$ChecksumFileName"
 "$ZipSha256  $ReleaseZipName" | Set-Content -Path $ChecksumFile -Encoding ascii
 $RecordedChecksum = (Get-Content $ChecksumFile -Raw).Trim()
 if ($RecordedChecksum -ne "$ZipSha256  $ReleaseZipName") {
-    throw "SHA256SUMS.txt tidak cocok dengan ZIP portable yang baru dibuat."
+    throw "$ChecksumFileName tidak cocok dengan ZIP portable yang baru dibuat."
 }
 
 $SmokeRoot = Join-Path $Root "portable smoke – O'Brien"
@@ -162,11 +182,11 @@ if ($Smoke.output_streams -notcontains "audio" -or $Smoke.output_streams -notcon
     throw "Portable smoke output belum terverifikasi audio+video."
 }
 if ($Smoke.gui_title -notlike "*v$Version*") {
-    throw "GUI portable tidak menampilkan versi release $Version. Title: $($Smoke.gui_title)"
+    throw "GUI portable tidak menampilkan versi candidate $Version. Title: $($Smoke.gui_title)"
 }
 
-Write-Host "Full Album Maker v$Version"
+Write-Host "Full Album Maker v$Version candidate"
 Write-Host "Portable ZIP siap di: $Zip"
-Write-Host "SHA256SUMS siap di: $ChecksumFile"
+Write-Host "Checksum siap di: $ChecksumFile"
 Write-Host "SHA-256: $ZipSha256"
 Write-Host "Smoke portable: OK ($($Smoke.output_duration_seconds)s; $($Smoke.output_bytes) bytes; $($Smoke.output_streams -join ', '))"

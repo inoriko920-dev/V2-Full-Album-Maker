@@ -9,39 +9,23 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
+MANIFEST_PATH = REPO_ROOT / "build" / "release_manifest.json"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from full_album_maker import __version__
 
 
-FFMPEG = {
-    "provider": "BtbN/FFmpeg-Builds",
-    "release_id": 402633211,
-    "release_tag": "autobuild-2026-10-03-18-14",
-    "asset_id": 608288215,
-    "asset_name": "ffmpeg-N-127142-g12b7b9891b-win64-gpl.zip",
-    "sha256": "a885f564dee2b60f69ab866c6c89b96ae531fc2ee1f24ff8b5b1a6d29960a96b",
-    "version_family": "master N-127142-g12b7b9891b",
-    "download_strategy": "dated_github_release_url_sha256",
-}
-
-PYTHON_BUILD = {
-    "python": "3.12.10",
-    "pip": "26.2.1",
-    "PySide6": "6.11.2",
-    "PyInstaller": "6.22.3",
-    "pytest": "8.4.2",
-    "Pillow": "11.3.0",
-}
-
-FONT = {
-    "family": "Noto Sans",
-    "source": "google/fonts",
-    "commit": "23e54b51ddffbc7713c583748e3bd86f62b1fa4a",
-    "path": "ofl/notosans/NotoSans[wdth,wght].ttf",
-    "license": "SIL Open Font License 1.1",
-}
+def _manifest() -> dict[str, object]:
+    data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    if int(data.get("schema_version", 0)) != 1:
+        raise RuntimeError("release_manifest.json schema_version tidak didukung.")
+    if data.get("target_stable_version") != __version__:
+        raise RuntimeError(
+            "Versi aplikasi tidak sama dengan target_stable_version release manifest: "
+            f"{__version__} != {data.get('target_stable_version')}"
+        )
+    return data
 
 
 def main() -> int:
@@ -51,23 +35,29 @@ def main() -> int:
     args = parser.parse_args()
     root = Path(args.root).resolve()
     output = root / args.output
+    manifest = _manifest()
 
     payload = {
         "format": "full-album-maker-capability-report",
-        "version": 1,
+        "version": 2,
         "app_version": __version__,
         "release_tag": f"v{__version__}",
         "build_commit": os.environ.get("GITHUB_SHA", "unknown"),
-        "platform": "Windows x86_64 portable onedir",
+        "platform": manifest["platform"],
         "offline_manual_workflow": True,
         "api_key_required_for_manual_edit_preview_render": False,
         "global_python_required": False,
         "global_ffmpeg_required": False,
         "bundled": {
-            "ffmpeg": FFMPEG,
-            "python_build": PYTHON_BUILD,
-            "font": FONT,
+            "ffmpeg": manifest["ffmpeg"],
+            "python_build": {
+                "python": manifest["python"]["version"],
+                "pip": manifest["python"]["pip"],
+                **manifest["python_packages"],
+            },
+            "font": manifest["font"],
         },
+        "artifact_contract": manifest["artifact"],
         "features": {
             "packed_timeline": "supported",
             "free_timeline_gap_silence": "supported",
@@ -89,14 +79,8 @@ def main() -> int:
             ],
             "ai_context_media_privacy": "stable IDs + safe basenames only; no locator/path/API key",
         },
-        "s12_validation": {
+        "q4_validation_contract": {
             "long_project_model": "200 songs x 54 seconds = 3 hours",
-            "long_project_scope": [
-                "timeline resolve",
-                "render-plan compile",
-                "FFmpeg graph generation",
-                "Windows command-line length gate",
-            ],
             "portable_zip_smoke": [
                 "relocated Unicode/space/apostrophe path",
                 "no global Python on PATH",
@@ -105,8 +89,8 @@ def main() -> int:
                 "real bundled-FFmpeg A/V render",
                 "ffprobe audio+video verification",
                 "Qt Foundation production main-window construction",
-                "v1.4 AI context builder active",
             ],
+            "windows_external_filter_script": "required",
         },
         "limitations": [
             "CI does not fully encode a three-hour album; it compile-stresses the 200-song/3-hour project and separately performs short real FFmpeg renders.",
