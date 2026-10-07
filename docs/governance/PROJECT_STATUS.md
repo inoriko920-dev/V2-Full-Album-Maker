@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M9 CONSOLIDATION
+QUALITY — Q2 INTEGRATION
 
 ## Current STEP
-M9 — Consolidation — PASS
+Q2 — Integration Quality Gate — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M9 — Consolidation — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, M3, M4, M5, M6, M7, M8, and M9 are implemented and validated.
+M0/T1 through M9 are implemented and validated. Q2 Integration Quality Gate is PASS.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -132,14 +132,26 @@ M9 result:
 
 Validated candidate `4a9a4b2f91b0dd81b749d02fd356c00d6b14b817` on Actions run `37600034073`: Q0 compile PASS; 73 M0–M9 contract tests passed (4 skipped); 13 bootstrap/retirement parity tests passed; 42 nine-route UI tests passed; 25 production navigation/persistence/render/preview tests passed (2 skipped); 29 responsive/lifecycle/entrypoint tests passed; 2 long-album structural stress tests passed; real-FFmpeg M9 job PASS with 3 tests.
 
+Q2 result:
+- current regression inventory contains 123 Python test files, above the STEP10 minimum floor of 115;
+- full repository pytest is green: 557 passed, 93 skipped, 0 failed;
+- explicit cross-workspace/session/lifecycle integration evidence is green: 60 passed;
+- M0–M9 ownership smoke remains green: 72 passed, 4 skipped;
+- initial Q2 full-suite run exposed four async-import compatibility regressions caused by disappearance of the legacy direct-window `async_import.probe_duration` patch surface;
+- the regression was fixed in source with a bounded legacy/direct-window MediaProbeService compatibility adapter while AppKernel production windows still use the exact M5-owned MediaProbeService;
+- no tests were deleted or weakened to bless the regression;
+- Q3 infrastructure, Q4 Windows artifact, and Q5 release work were not started.
+
+Validated Q2 candidate `98a8f096990f1135989997f4047340c3b5bbb270` on Actions run `37601017717`: 123-file inventory PASS; full pytest 557 passed / 93 skipped; cross-workspace/session/lifecycle 60 passed; M0–M9 ownership smoke 72 passed / 4 skipped.
+
 ## Next Operational Step
-M9 is PASS and the STEP 03 M0–M9 architecture migration sequence is complete. On the next explicit turn:
-1. Start **Q2 — Integration Quality Gate** from STEP 10 only.
-2. Run the full pytest regression floor plus cross-workspace/session/lifecycle integration evidence.
-3. Do not change architecture merely to make Q2 pass; fix only demonstrated regressions.
-4. Preserve all M0–M9 ownership boundaries and frozen schema/UI/compiler contracts.
-5. Report Q2 PASS/FAIL with exact evidence before proceeding to Q3 Infrastructure.
-6. Do not start Windows Q4 artifact build or Q5 release publication in the same turn.
+Q2 is PASS. On the next explicit turn:
+1. Start **Q3 — Infrastructure Quality Gate** from STEP 10 only.
+2. Run the approved real-FFmpeg tier evidence, UI capture matrix, and structural/performance benchmark evidence.
+3. Keep Q3 evidence tied to the exact candidate commit and investigate any >10% same-environment performance regression.
+4. Preserve all M0–M9 ownership boundaries and the Q2 full-regression result.
+5. Report Q3 PASS/FAIL before proceeding to Q4.
+6. Do not start Q4 Windows artifact build or Q5 stable release publication in the same turn.
 
 ## Canonical References
 - MASTER planning DOCX.

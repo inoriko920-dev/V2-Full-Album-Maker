@@ -184,13 +184,24 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - GitHub Actions run `37600034073`: 73 M0–M9 contracts passed (4 skipped), 13 bootstrap/retirement parity tests passed, 42 nine-route UI tests passed, 25 production navigation/persistence/render/preview tests passed (2 skipped), 29 responsive/lifecycle/entrypoint tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M9 job PASS with 3 tests.
 - Detailed records: `docs/implementation/M9_CONSOLIDATION.md` and `docs/implementation/M9_EVIDENCE.md`.
 
+## Q2 Integration Quality Gate — PASS
+- Branch: `quality-q2-integration`
+- Current test inventory: 123 Python test files; STEP10 floor 115.
+- Full pytest: 557 passed, 93 skipped, 0 failed.
+- Cross-workspace/session/lifecycle evidence: 60 passed.
+- M0–M9 ownership smoke: 72 passed, 4 skipped.
+- Initial Q2 run exposed four real async-import compatibility regressions; tests were not weakened.
+- Source fix restores the direct-window monkeypatchable probe surface through a compatibility MediaProbeService while production AppKernel windows retain the exact M5 MediaProbeService owner.
+- Successful Actions run: `37601017717`.
+- Detailed records: `docs/implementation/Q2_INTEGRATION_QUALITY_GATE.md` and `docs/implementation/Q2_EVIDENCE.md`.
+
 ## Next Work
-- Q2 Integration Quality Gate only.
-- Run the STEP 10 full regression floor and cross-workspace/session/lifecycle integration evidence.
-- Preserve the complete M0–M9 ownership model; do not redesign architecture to bless a failing test.
-- Fix only demonstrated regressions and keep UI/schema/compiler contracts frozen.
-- Do not proceed to Q3 Infrastructure until Q2 PASS.
-- Do not start Q4 Windows artifact or Q5 stable release work yet.
+- Q3 Infrastructure Quality Gate only.
+- Run approved real-FFmpeg tier evidence, UI capture matrix, and structural/performance benchmarks.
+- Preserve the Q2 557-pass full-regression baseline and complete M0–M9 ownership model.
+- Investigate rather than waive any real-infrastructure failure or >10% same-environment performance regression.
+- Do not proceed to Q4 Windows Artifact until Q3 PASS.
+- Do not start Q5 stable release work yet.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -207,4 +218,5 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - M8 Legacy Bridge Retirement: PASS
 - M9 Consolidation: PASS
 - STEP 03 M0–M9 architecture migration: COMPLETE
-- Next operational action: Q2 Integration Quality Gate only; then report gate before Q3.
+- Q2 Integration Quality Gate: PASS
+- Next operational action: Q3 Infrastructure Quality Gate only; then report gate before Q4.
