@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 import subprocess
@@ -348,3 +349,45 @@ def test_process_runner_terminate_escalates_to_kill() -> None:
     assert process.terminate_calls == 1
     assert process.kill_calls == 1
     assert process.poll() is not None
+
+
+
+def test_cancel_during_verification_never_replaces_existing_final(tmp_path: Path) -> None:
+    base = _job(tmp_path)
+    settings = replace(base.settings, overwrite=True)
+    job = RenderJob(base.snapshot, settings)
+    final = settings.final_output
+    final.write_bytes(b"old-verified-final")
+    cancel_event = threading.Event()
+    verifier_called = threading.Event()
+
+    def cancel_inside_verifier(staged, *, settings, expected_duration_seconds, ffprobe):
+        verifier_called.set()
+        cancel_event.set()
+        return _verified(
+            staged,
+            settings=settings,
+            expected_duration_seconds=expected_duration_seconds,
+            ffprobe=ffprobe,
+        )
+
+    executor = RenderExecutor(
+        _capability(),
+        runner=FakeRunner(),
+        verifier=cancel_inside_verifier,
+    )
+
+    with pytest.raises(
+        Step10RenderCancelled,
+        match="setelah verifikasi, sebelum publish final",
+    ):
+        executor.execute(job, cancel_event=cancel_event)
+
+    assert verifier_called.is_set()
+    assert job.state == RenderJobState.CANCELLED
+    assert job.error_code == "CANCELLED"
+    assert final.read_bytes() == b"old-verified-final"
+    assert job.verified_output == ""
+    assert not list(tmp_path.glob(".*.rendering.mp4"))
+    assert not list(tmp_path.glob(".fam-bundle-*.json"))
+    assert not list(tmp_path.glob(".*.fam-backup-*"))
