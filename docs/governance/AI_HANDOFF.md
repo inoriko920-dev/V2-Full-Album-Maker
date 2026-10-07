@@ -58,14 +58,18 @@ Wrap current proven behavior first. Route one path through the facade. Prove par
 - Initial updates use side-by-side portable folders; auto-updater/installer are deferred.
 - Old repo remains read-only permanently.
 
-## PRE-CODING HARD BLOCK
-Planning is complete, but implementation is NOT unlocked yet.
+## PRE-CODING DOCUMENTATION GATE — PASS
+The documentation hard block has been cleared.
 
-Coding may start only after:
-1. MASTER + STEP00–11 canonical final DOCX files are physically present in the V2 repository.
-2. Their SHA-256 values match `docs/planning/PLANNING_ARTIFACTS_MANIFEST.md`.
-3. Obsolete duplicate planning drafts are excluded.
-4. PROJECT_STATUS and this handoff confirm the gate PASS.
+Verified evidence:
+1. MASTER + STEP00–11 canonical final DOCX files are present at `docs/planning/source-of-truth/`.
+2. Canonical binary commit: `19de01219fbfd6aa1662785b298649c67a682da2`.
+3. 13/13 Git blob identities match the exact local canonical bytes.
+4. The local canonical bytes match all SHA-256 values in `docs/planning/PLANNING_ARTIFACTS_MANIFEST.md`.
+5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
+6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
+
+Implementation is now allowed, but has **not started yet**.
 
 ## First Work After Unlock
 - M0 / T1: FeatureParityRegistry + characterization map.
@@ -73,8 +77,8 @@ Coding may start only after:
 - Do not start with animation catalog, compiler rewrite, route patch deletion, or release work.
 
 ## Current Handoff
-- Phase: PLANNING COMPLETE / PRE-IMPLEMENTATION DOCUMENTATION GATE
-- Completed through: STEP 11
-- STEP 00–11: PASS
-- Coding: BLOCKED pending canonical DOCX repository presence/checksum verification
-- Next operational action: upload/verify canonical planning source-of-truth, then start M0/T1.
+- Phase: IMPLEMENTATION READY
+- Completed planning: STEP 00–11 PASS
+- Pre-coding documentation gate: PASS
+- Coding: UNLOCKED, NOT STARTED
+- Next operational action: M0/T1 FeatureParityRegistry + characterization map only; then report gate before M1.
