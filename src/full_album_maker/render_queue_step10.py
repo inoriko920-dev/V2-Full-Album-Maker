@@ -579,29 +579,30 @@ class RenderQueueStore:
 
 
 class RenderQueue:
-    """Persistent single-active-slot queue; execution is owned by RenderExecutor."""
+    """Persistent shared queue with session-aware cross-process ownership."""
 
     def __init__(self, store: RenderQueueStore | None = None) -> None:
         self.store = store or RenderQueueStore()
+        self.store.start_session()
         self.jobs, _ = self.store.recover_for_startup()
         self.recovery_warning = self.store.last_recovery_warning
         self.quarantined_path = self.store.quarantined_path
+
+    def close(self) -> None:
+        self.store.close_session()
 
     def enqueue(self, job: RenderJob) -> RenderJob:
         """Queue only a job that has already passed real preflight."""
         if job.state != RenderJobState.READY:
             raise ValueError("Job harus READY dari preflight nyata sebelum masuk queue.")
-        if any(
-            item.job_id == job.job_id and item.attempt_id == job.attempt_id
-            for item in self.jobs
-        ):
+        if any(_job_key(item) == _job_key(job) for item in self.jobs):
             raise ValueError("Attempt render sudah ada di queue/history.")
         job.transition(RenderJobState.QUEUED)
-        self.jobs.append(job)
-        self._trim_and_save()
+        self.jobs = self.store.merge_changes([(job, "")])
         return job
 
     def next_queued(self) -> RenderJob | None:
+        """In-memory inspection only; production dequeue uses claim_next_queued()."""
         if any(job.state in _LIVE_ACTIVE_STATES for job in self.jobs):
             return None
         return next(
@@ -609,16 +610,26 @@ class RenderQueue:
             None,
         )
 
+    def claim_next_queued(self) -> RenderJob | None:
+        self.jobs, selected = self.store.claim_next_queued()
+        return selected
+
     def update(self, job: RenderJob) -> None:
-        for index, current in enumerate(self.jobs):
-            if current.job_id == job.job_id and current.attempt_id == job.attempt_id:
-                self.jobs[index] = job
-                self._trim_and_save()
-                return
-        self.jobs.append(job)
-        self._trim_and_save()
+        # DRAFT Render Now / Retry preflight and live render states are owned by
+        # this process. Terminal states relinquish ownership. QUEUED ownership is
+        # assigned only by claim_next_queued(), never by a plain update.
+        owner = (
+            self.store.session_id
+            if job.state in _RECOVER_AS_INTERRUPTED
+            else ""
+        )
+        self.jobs = self.store.merge_changes([(job, owner)])
 
     def retry(self, job_id: str, attempt_id: str) -> RenderJob:
+        # Refresh from disk first so retry cannot target history deleted/replaced
+        # by another instance after this process opened.
+        latest = self.store.load()
+        self.jobs = latest
         source = next(
             (
                 job
@@ -632,10 +643,12 @@ class RenderQueue:
         retry = source.retry()
         # Retry is deliberately DRAFT: it must pass preflight again before
         # enqueue, because source/disk/encoder/output may have changed.
-        self.jobs.append(retry)
-        self._trim_and_save()
+        self.jobs = self.store.merge_changes(
+            [(retry, self.store.session_id)]
+        )
         return retry
 
-    def _trim_and_save(self) -> None:
-        self.jobs = _bounded_history(self.jobs)
-        self.store.save(self.jobs)
+    def refresh(self) -> list[RenderJob]:
+        self.jobs = self.store.load()
+        return self.jobs
+
