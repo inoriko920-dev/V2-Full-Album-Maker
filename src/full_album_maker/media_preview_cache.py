@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import inspect
 import json
 from pathlib import Path
 import queue
@@ -276,6 +277,50 @@ def invalidate_source(
     return removed
 
 
+def _call_generate_preview(
+    asset: MediaAsset,
+    *,
+    cache_manager: CacheManager,
+    publish_guard: Callable[[], bool],
+) -> str:
+    """Call the current generator while preserving legacy test/adapter shape."""
+
+    try:
+        parameters = inspect.signature(generate_preview).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    if "publish_guard" in parameters:
+        return str(
+            generate_preview(
+                asset,
+                cache_manager=cache_manager,
+                publish_guard=publish_guard,
+            )
+        )
+    return str(generate_preview(asset, cache_manager=cache_manager))
+
+
+def _discard_stale_worker_output(
+    path: str,
+    *,
+    asset: MediaAsset,
+    cache_manager: CacheManager,
+) -> None:
+    if not path:
+        return
+    try:
+        value = Path(path).resolve(strict=False)
+        root = _cache_root(cache_manager).resolve(strict=False)
+        value.relative_to(root)
+    except (OSError, ValueError):
+        return
+    cache_manager.evict(
+        "media-preview",
+        value,
+        _metadata_path(value),
+    )
+
+
 class MediaPreviewCache(QObject):
     """Bounded daemon-worker preview queue with de-duplication and stale guards."""
 
@@ -445,12 +490,21 @@ class MediaPreviewCache(QObject):
                     )
 
             try:
-                path = generate_preview(
+                path = _call_generate_preview(
                     asset,
                     cache_manager=self.cache_manager,
                     publish_guard=publish_guard,
                 )
-                error = ""
+                if not publish_guard():
+                    _discard_stale_worker_output(
+                        path,
+                        asset=asset,
+                        cache_manager=self.cache_manager,
+                    )
+                    path = ""
+                    error = "Preview generation sudah stale."
+                else:
+                    error = ""
             except Exception as exc:
                 path = ""
                 error = str(exc)
