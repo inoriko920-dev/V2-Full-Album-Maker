@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-QUALITY — Q4 WINDOWS ARTIFACT
+RELEASE — Q5 STABLE
 
 ## Current STEP
-Q4 — Windows Artifact Quality Gate — PASS
+Q5 — Release Quality Gate — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ Q4 — Windows Artifact Quality Gate — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1 through M9 are implemented and validated. Q2, Q3, and Q4 Quality Gates are PASS.
+M0/T1 through M9 are implemented and validated. Q2, Q3, Q4, and Q5 Quality Gates are PASS. Full Album Maker v2.0.0 stable is published.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -183,14 +183,33 @@ Exact Q4 artifact identity:
 
 The Q4 workflow ignores documentation-only pushes after candidate freeze so governance/evidence commits cannot generate a replacement artifact. Q5 must publish the exact tested inner ZIP above without rebuilding it.
 
+Q5 result:
+- successful workflow run: `37617534800`;
+- stable GitHub Release: `v2.0.0`;
+- release ID: `405709866`;
+- published at: `2026-10-07T11:57:27Z`;
+- tag target is the exact Q4 candidate `d2ce2ccac62cdcd8994a38251a5b547c8460421e`;
+- published ZIP is `Full-Album-Maker-v2.0.0-Windows-Portable.zip`, 189554128 bytes;
+- published ZIP SHA-256 is exactly `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`;
+- GitHub release asset digest independently reports the same SHA-256;
+- Q5 re-downloaded the published asset and re-hashed it successfully;
+- `SHA256SUMS.txt` was also published and verified;
+- release is stable (not draft, not prerelease);
+- rollback stable tag `v1.5.0` was verified before publication;
+- no rebuild occurred in Q5;
+- Q5 evidence artifact ID `11481041761` was uploaded.
+
+
 ## Next Operational Step
-Q4 is PASS. On the next explicit turn:
-1. Start **Q5 — Release Quality Gate** only.
-2. Use candidate SHA `d2ce2ccac62cdcd8994a38251a5b547c8460421e` and retrieve Actions artifact `11480755092` from run `37615631835`; do not rebuild the portable ZIP.
-3. Verify the inner ZIP name and SHA-256 exactly: `Full-Album-Maker-v2.0.0-Windows-Portable.zip` / `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`.
-4. Replace/retire any old STEP12 hardcoded release ancestry in the Q5 publication path and ensure publication targets only the approved Q4 artifact.
-5. Re-verify release notes, checksum, provenance/manifest, rollback evidence, and stable tag target before publication.
-6. Publish only after Q5 PASS, and publish the exact Q4-tested ZIP + checksum without rebuilding.
+Q5 is PASS. The approved STEP 00–11 workflow and Q2–Q5 quality sequence are complete.
+
+No additional release/build gate is pending. Further work must begin only from a new explicit user instruction, such as post-release bug fixing, v2.0.x maintenance, main-branch integration, or a new feature cycle.
+
+Stable release:
+- `v2.0.0`
+- exact candidate: `d2ce2ccac62cdcd8994a38251a5b547c8460421e`
+- exact ZIP SHA-256: `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`
+- rollback stable: `v1.5.0`
 
 ## Canonical References
 - MASTER planning DOCX.

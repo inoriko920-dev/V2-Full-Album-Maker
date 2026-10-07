@@ -1,10 +1,9 @@
 # Full Album Maker v2.0.0 — Release Notes
 
-Status: **Q4 release candidate — not published**
+Status: **Stable — Q5 Release Quality Gate PASS**
 
-This file is part of the exact v2.0.0 candidate before the Windows Artifact and
-Q5 Release gates are complete. A stable GitHub Release is not authorized until
-Q5 explicitly approves the exact Q4-tested artifact identity.
+Full Album Maker v2.0.0 was published only after Q5 verified the exact
+Q4-tested Windows portable artifact. The stable asset was not rebuilt.
 
 ## Major V2 changes
 
@@ -20,27 +19,50 @@ Q5 explicitly approves the exact Q4-tested artifact identity.
 - Proven obsolete legacy route bridges were retired.
 - Production bootstrap ownership was consolidated into one ordered runtime
   installer boundary.
-- Q2 full regression and Q3 infrastructure gates are recorded in repository
-  evidence.
+- Q2 full integration regression, Q3 infrastructure, Q4 Windows artifact, and
+  Q5 release gates all passed.
 
-## Windows portable candidate
+## Stable Windows portable
 
-The Q4 candidate is built from `build/release_manifest.json` and includes:
+Published asset:
+- `Full-Album-Maker-v2.0.0-Windows-Portable.zip`
+- SHA-256:
+  `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`
+- bytes: `189554128`
+
+Stable tag:
+- `v2.0.0`
+
+Exact candidate:
+- `d2ce2ccac62cdcd8994a38251a5b547c8460421e`
+
+The portable bundle includes:
 - Python 3.12.10 build runtime;
 - pinned Python package lock;
 - pinned BtbN Windows FFmpeg/ffprobe with SHA-256 verification;
 - Noto Sans pinned by immutable google/fonts commit;
 - PyInstaller onedir application;
-- release manifest, capabilities report, notices and license material;
+- release manifest, capabilities report, notices, and license material;
 - checksum file for the exact ZIP.
 
-Q4 requires the extracted ZIP to work from a Unicode/apostrophe path without
-global Python, global FFmpeg, Gemini key, or Google API key and to verify a real
-audio+video output using the bundled tools.
+## Release verification
 
-## Release status
+Q5:
+- retrieved the existing Q4 artifact instead of rebuilding;
+- verified exact ZIP filename, byte length, and SHA-256;
+- verified embedded release manifest, capabilities, FFmpeg provenance, and font
+  provenance;
+- re-ran the extracted exact ZIP smoke from a Unicode/apostrophe path;
+- removed global Python/FFmpeg and API keys from the smoke environment;
+- verified real audio+video output;
+- published the exact Q4 ZIP;
+- downloaded the published release ZIP again and re-verified the same SHA-256;
+- verified the stable tag points to the exact Q4 candidate.
 
-This candidate is **not published** by the build workflow.
+## Rollback
 
-Q5 must approve the exact semantic version + candidate commit + ZIP SHA-256 and
-then publish that exact tested ZIP without rebuilding it.
+Previous stable remains:
+- `v1.5.0`
+
+Updates use side-by-side portable folders. Application rollback does not
+silently rewrite project data.

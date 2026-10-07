@@ -226,13 +226,28 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - Q4 workflow ignores docs-only pushes after artifact freeze; later documentation commits are not release candidates and must not replace the tested artifact.
 - Detailed records: `docs/implementation/Q4_WINDOWS_ARTIFACT_QUALITY_GATE.md` and `docs/implementation/Q4_EVIDENCE.md`.
 
+## Q5 Release Quality Gate — PASS
+- Stable release: `v2.0.0`.
+- Successful Q5 Actions run: `37617534800`.
+- Stable release ID: `405709866`.
+- Exact tag target / Q4 candidate: `d2ce2ccac62cdcd8994a38251a5b547c8460421e`.
+- Published portable ZIP: `Full-Album-Maker-v2.0.0-Windows-Portable.zip`.
+- Published ZIP SHA-256: `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`.
+- Published ZIP bytes: `189554128`.
+- GitHub release asset digest matches the frozen Q4 SHA-256.
+- Q5 did not rebuild the ZIP; it downloaded Q4 artifact ID `11480755092`, verified it, smoke-tested the exact ZIP, published it, then downloaded it again and re-verified the same digest.
+- `SHA256SUMS.txt` is published and verified.
+- Release is stable: draft=false, prerelease=false.
+- Rollback stable `v1.5.0` was verified.
+- Q5 evidence artifact ID: `11481041761`.
+- Detailed records: `docs/implementation/Q5_RELEASE_QUALITY_GATE.md` and `docs/implementation/Q5_EVIDENCE.md`.
+
 ## Next Work
-- Q5 Release Quality Gate only.
-- Q5 input is frozen: candidate `d2ce2ccac62cdcd8994a38251a5b547c8460421e`, run `37615631835`, artifact ID `11480755092`.
-- Retrieve the existing Q4 artifact and verify inner ZIP SHA-256 `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`; do not rebuild it.
-- Replace/retire the old STEP12 hardcoded ancestry in the publication path and bind publication to the frozen Q4 identity.
-- Re-verify release notes, SHA256SUMS, release manifest/notices, rollback/provenance evidence, and stable tag target.
-- Only after Q5 PASS may the exact tested ZIP be published as stable v2.0.0.
+- No STEP 00–11 or Q2–Q5 gate remains pending.
+- Stable v2.0.0 is published from the frozen Q4 candidate.
+- Do not rebuild or replace v2.0.0 assets in later maintenance work.
+- Use v1.5.0 as the verified previous stable rollback tag.
+- Any future change starts a new explicit maintenance/feature cycle and requires its own version/release evidence.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -252,6 +267,10 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - Q2 Integration Quality Gate: PASS
 - Q3 Infrastructure Quality Gate: PASS
 - Q4 Windows Artifact Quality Gate: PASS
-- Frozen Q4 release-candidate SHA: d2ce2ccac62cdcd8994a38251a5b547c8460421e
-- Frozen Q4 portable ZIP SHA-256: 4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad
-- Next operational action: Q5 Release Quality Gate only; do not rebuild the Q4 ZIP.
+- Q5 Release Quality Gate: PASS
+- Stable v2.0.0: PUBLISHED
+- Stable tag target: d2ce2ccac62cdcd8994a38251a5b547c8460421e
+- Stable portable ZIP SHA-256: 4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad
+- Previous stable rollback tag: v1.5.0
+- Approved STEP 00–11 + Q2–Q5 workflow: COMPLETE
+- Next action: none until a new explicit user instruction starts maintenance or a new development cycle.
