@@ -279,9 +279,11 @@ def test_media_preview_cache_close_suppresses_inflight_completion(tmp_path: Path
     delivered: list[object] = []
     job_updates: list[int] = []
 
-    def slow_generate(_asset, *, cache_manager=None):
+    def slow_generate(_asset, *, cache_manager=None, publish_guard=None):
+        assert callable(publish_guard)
         entered.set()
         assert release.wait(timeout=5)
+        assert publish_guard() is False
         target = tmp_path / "generated.png"
         target.write_bytes(b"png")
         return str(target)
