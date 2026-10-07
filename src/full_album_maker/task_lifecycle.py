@@ -143,7 +143,6 @@ class TaskScope:
                 not self._closed
                 and token.scope_id == self._scope_id
                 and token.generation == self._generation
-                and token.task_id in self._tokens
                 and not token.cancelled
             )
 
