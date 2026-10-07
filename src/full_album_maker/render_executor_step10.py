@@ -619,6 +619,13 @@ class RenderExecutor:
                 raise Step10RenderError(
                     "Output verifier tidak memberi status VERIFIED."
                 )
+            # Cancellation remains authoritative until the atomic publish commit
+            # point. A cancel arriving while ffprobe/verifier is running must
+            # never replace a previously good final with the staged output.
+            if cancel_event is not None and cancel_event.is_set():
+                raise Step10RenderCancelled(
+                    "Render dibatalkan setelah verifikasi, sebelum publish final."
+                )
 
             publish_bundle_transactional([(staged, final)])
             staged = None
@@ -648,6 +655,7 @@ class RenderExecutor:
                 RenderJobState.STARTING,
                 RenderJobState.RUNNING,
                 RenderJobState.PAUSED,
+                RenderJobState.FINALIZING,
             }:
                 job.transition(RenderJobState.CANCELLED)
             raise
