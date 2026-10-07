@@ -172,5 +172,5 @@ def test_successful_relink_moves_sidecar_before_project_path_commit(
     assert old.duration == 9.0
     assert project._visual_order == [str(new_path)]
     latest = MediaSidecarStore(project_path)
-    assert "old-id" not in latest.records()
+    assert old_id not in latest.records()
     assert latest.get(new_id) == record
