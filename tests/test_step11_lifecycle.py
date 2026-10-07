@@ -253,6 +253,7 @@ def test_live_instance_recovery_is_not_offered_or_deleted(
         assert fake.foundation_state.calls == []
 
         owner.close()
+        observer.session_alive = lambda _session_id: False
 
         assert integration_feature._maybe_offer_recovery(fake, canonical) is True
         assert recovery_path.is_file()
