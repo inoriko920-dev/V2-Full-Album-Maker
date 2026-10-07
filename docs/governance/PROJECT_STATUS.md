@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-PLANNING
+PLANNING COMPLETE — PRE-IMPLEMENTATION DOCUMENTATION GATE
 
 ## Current STEP
-STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate
+STEP 11 — Windows Portable Build, Release, Rollback, dan Final Handoff
 
 ## Gate Status
 - STEP 00: PASS
@@ -18,38 +18,43 @@ STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate
 - STEP 08: PASS
 - STEP 09: PASS
 - STEP 10: PASS
+- STEP 11: PASS
 
-## STEP 10 Final Quality Direction
-- Existing 115-file Python test suite/workflows are the minimum regression floor.
-- Testing is layered L0 Static/Supply through L7 Release Candidate.
-- Every MUST KEEP feature maps to explicit regression evidence.
-- New facades/ports require legacy-vs-new contract tests before legacy direct paths retire.
-- Concurrency/lifecycle tests must prove terminal state, stale-result rejection, and bounded resource behavior.
-- Destructive save/render/recovery/process boundaries require fault injection.
-- Real FFmpeg testing remains mandatory for affected render/Spectrum paths; mocks do not replace it.
-- 200-song/~3-hour Packed/Free structural stress remains an upper regression floor.
-- Performance is compared on same-environment baselines; >10% regression requires investigation unless a reliability/correctness tradeoff is explicitly accepted.
-- UI functional regression and pixel-match status are reported separately.
-- Final release requires exact Windows portable artifact, extracted-ZIP smoke, audio+video verification, supply-chain/license/secret checks, and checksum identity.
-- Rerun-until-green cannot waive an unexplained release blocker.
-- Declared Python >=3.11 compatibility must be tested on 3.11 or revised explicitly.
-- Promotion uses Q0 Developer → Q1 Slice → Q2 Integration → Q3 Infrastructure → Q4 Windows Artifact → Q5 Release.
+## STEP 11 Final Release / Handoff Direction
+- First mature V2 stable target is v2.0.0 after implementation and Q0–Q5 PASS; no version bump was performed during planning.
+- Stable publication must be explicit from a Q5-approved candidate SHA; main push must not auto-publish an unapproved stable release.
+- Exact tested ZIP must be the published ZIP and is identified by semantic version + candidate commit + SHA-256.
+- Windows portable remains the primary distribution model: Python 3.12.10 release runtime, pinned dependencies, pinned FFmpeg digest, pinned font, PyInstaller onedir.
+- Extracted-ZIP smoke must run in Unicode/apostrophe path without global Python, global FFmpeg, or API keys and must verify audio+video output.
+- One canonical release manifest should prevent drift between workflow/build script/CAPABILITIES/notices.
+- Current THIRD_PARTY_NOTICES.md contains stale FFmpeg provenance and is a release blocker before V2 RC.
+- Current stable-release-on-main behavior and old hardcoded STEP11 ancestry in release QA must be redesigned before V2 stable.
+- Application rollback and project-data rollback are separate contracts.
+- Initial updates use side-by-side portable folders; auto-updater/installer remain deferred.
+- Old Full-Album-Maker repository remains permanently read-only.
+
+## Planning Status
+STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-BLOCKED — planning phase.
+BLOCKED — pre-coding source-of-truth upload gate is still pending.
 
-No STEP 10 source-code, test-code, workflow, dependency, build-script, UI, schema, renderer, or project-format change was made.
+No STEP 11 source-code, workflow, build-script, dependency, UI, renderer, schema, version, or release mutation was made.
 
-## Next STEP
-STEP 11 — Windows Portable Build, Release, Rollback, dan Final Handoff.
-
-STEP 11 must finalize reproducible Windows build/release packaging, exact artifact identity, licenses/notices, release evidence, rollback procedure, version/release notes, and AI handoff. After STEP 11 planning is complete, the full STEP 00–11 planning source-of-truth must be placed in the V2 repository before implementation is allowed.
+## Next Operational Gate
+Before implementation:
+1. Physically place the canonical MASTER + STEP 00–11 final DOCX files in the V2 repository.
+2. Verify every DOCX SHA-256 against `docs/planning/PLANNING_ARTIFACTS_MANIFEST.md`.
+3. Exclude obsolete duplicate drafts.
+4. Re-check governance/status/handoff.
+5. Only then unlock implementation, starting at M0/T1 FeatureParityRegistry/characterization, followed by additive M1 AppKernel/CompositionRoot.
 
 ## Canonical References
-- Master planning DOCX.
-- STEP 00–10 planning DOCX files.
-- `docs/planning/STEP_10_TESTING_REGRESSION_STRESS_BENCHMARK_DAN_RELEASE_QUALITY_GATE.md`
-- `docs/planning/STEP_10_ARTIFACT_INTEGRITY.txt`
-- prior STEP 01–09 planning summaries/integrity files.
+- MASTER planning DOCX.
+- STEP 00–11 final planning DOCX files.
+- `docs/planning/STEP_11_WINDOWS_PORTABLE_BUILD_RELEASE_ROLLBACK_DAN_HANDOFF_FINAL.md`
+- `docs/planning/STEP_11_ARTIFACT_INTEGRITY.txt`
+- `docs/planning/PLANNING_ARTIFACTS_MANIFEST.md`
+- prior STEP planning summaries/integrity files.
 - `docs/governance/PROJECT_GOVERNANCE.md`
 - `docs/governance/AI_HANDOFF.md`
