@@ -1,0 +1,67 @@
+# Post-release Maintenance Policy
+
+Status: active after stable v2.0.0.
+
+## Stable immutability
+
+Published stable releases are immutable references.
+
+For v2.0.0:
+- tag: `v2.0.0`
+- exact candidate: `d2ce2ccac62cdcd8994a38251a5b547c8460421e`
+- Windows portable SHA-256:
+  `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`
+
+Do not:
+- move or recreate the stable tag;
+- replace an existing stable release asset;
+- overwrite its checksum;
+- rebuild a different ZIP and present it as the same release.
+
+## Maintenance workflow
+
+Future changes start from current `main` and use a dedicated branch.
+
+Preferred flow:
+1. create maintenance/feature branch;
+2. make the smallest scoped change;
+3. run focused tests;
+4. open a pull request to `main`;
+5. require Windows validation when build/runtime/release paths are touched;
+6. merge only after validation is green;
+7. use a new semantic version for any new published artifact.
+
+## Versioning after v2.0.0
+
+Examples:
+- bug fix only: v2.0.1
+- backward-compatible feature set: v2.1.0
+- breaking project/schema/workflow change: v3.0.0
+
+Never reuse v2.0.0 for a changed binary.
+
+## Release rules
+
+A future release must preserve the same separation already proven by Q4/Q5:
+- artifact build/validation first;
+- freeze exact candidate + artifact digest;
+- release gate retrieves and verifies the frozen artifact;
+- release gate must not rebuild the stable ZIP;
+- post-publication re-download and SHA-256 verification are required.
+
+## Main-branch protection
+
+Repository-level branch protection/ruleset should be enabled manually for
+`main` because the current ChatGPT GitHub connection does not have repository
+administration permission.
+
+Recommended settings:
+- require pull request before merge;
+- require status checks;
+- include the Windows validation check for relevant changes;
+- block force pushes;
+- block branch deletion;
+- restrict direct pushes where appropriate.
+
+Tracking issue:
+- #1 — Post-release hardening: protect main branch
