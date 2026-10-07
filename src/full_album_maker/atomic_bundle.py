@@ -27,17 +27,34 @@ def _replace_file(source: Path, target: Path) -> None:
 
 
 def _backup_file(source: Path, backup: Path) -> None:
-    """Preserve an existing final without moving it out of place.
+    """Preserve an existing final without ever exposing a partial backup.
 
     NTFS hard links make this O(1) for normal portable Windows use. Filesystems
-    without hard-link support fall back to copy2. The original final remains
-    visible until the new bundle is ready to replace it.
+    without hard-link support fall back to a staged copy in the same directory.
+    The public backup path is created only after the copy is complete and fsynced,
+    so ENOSPC / drive-loss cannot leave a partial backup that rollback might trust.
     """
 
     try:
         os.link(source, backup)
+        return
     except OSError:
-        shutil.copy2(source, backup)
+        pass
+
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{backup.name}.copying-",
+        suffix=".tmp",
+        dir=str(backup.parent),
+    )
+    os.close(fd)
+    temp_backup = Path(temp_name)
+    try:
+        shutil.copy2(source, temp_backup)
+        with temp_backup.open("rb") as handle:
+            os.fsync(handle.fileno())
+        _replace_file(temp_backup, backup)
+    finally:
+        _cleanup_path(temp_backup)
 
 
 def _journal_payload(state: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
