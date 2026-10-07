@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M2 TASK LIFECYCLE
+IMPLEMENTATION — M3 PERSISTENCE
 
 ## Current STEP
-M2 — Task Lifecycle / TaskSupervisor / TaskScope — PASS
+M3 — ProjectPersistence — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,32 +37,32 @@ M2 — Task Lifecycle / TaskSupervisor / TaskScope — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, and M2 are implemented and validated.
+M0/T1, M1, M2, and M3 are implemented and validated.
 
-M2 result:
-- typed lifecycle `AppError/AppResult` primitives added as STEP04 H1 prerequisite;
-- central `TaskToken / TaskScope / TaskSupervisor / TaskHandle` boundary added;
-- AppKernel now owns exactly one central TaskSupervisor and closes it in `finally`;
-- scope generation invalidation cancels old tokens and rejects stale result use;
-- cooperative cancellation and bounded close are explicit;
-- non-cooperative Python threads are reported as unfinished instead of blocking forever;
-- seven existing async/task owners are recorded in a machine-readable inventory;
-- no legacy async owner implementation was migrated or edited.
+M3 result:
+- one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
+- native v2 Save uses clone -> validate -> same-directory stage -> semantic read-back verify -> atomic publish;
+- STEP11 compatibility-envelope Save is routed through ProjectPersistence while preserving the proven writer;
+- editor-v2 open/save is routed through ProjectPersistence;
+- recovery is classified as CORRUPT / STALE / SAME / NEWER / FOREIGN;
+- corrupt/foreign/stale recovery evidence is not silently deleted;
+- v1 migration IDs are deterministic for the same canonical legacy payload;
+- ProjectPersistence is wired through CompositionRoot/AppKernel;
+- ProjectDocument schema v2 and TIMEBASE=240000 remain unchanged.
 
-Validated on Actions run `37585385248`: Q0 compile PASS, 27 M0/M1/M2 contract tests PASS, 7 legacy async stale/cancel tests PASS, 3 render/close lifecycle tests PASS, 1 nine-workspace navigation test PASS, and 1 authoritative-state/canonical-save production shell test PASS.
+Validated on Actions run `37588571955`: Q0 compile PASS, 37 M0–M3 contract tests PASS, 8 baseline atomic/project persistence tests PASS, 14 STEP11 persistence lifecycle/integration tests PASS, production canonical Save PASS, and nine-workspace read-only navigation PASS.
 
-H3 ProcessSupervisor and H4 ApplicationLifecycleService are **not implemented in this slice**. No persistence, RenderEngine, preview/cache, workspace, AI ownership, schema, dependency, UI, or release migration was performed.
+No RenderEngine M4, ProcessSupervisor, Preview/Cache M5, workspace migration, UI redesign, schema bump, dependency change, or release work was performed.
 
 ## Next Operational Step
-M2 is PASS. On the next explicit implementation turn:
-1. Start **M3 — Persistence** only, following the approved M0→M9 order.
-2. Keep ProjectDocument authoritative and legacy Project compatibility-only.
-3. Introduce/wrap ProjectPersistence behind existing proven save/load behavior before replacing any direct path.
-4. Preserve atomic committed snapshot → stage → semantic verification → atomic publish.
-5. Preserve recovery as separate from canonical Save.
-6. Do not introduce ProcessSupervisor/render migration, PreviewEngine migration, WorkspaceRegistry migration, or UI redesign in M3.
-7. Run focused roundtrip/save-failure/recovery Q0/Q1 evidence before reporting M3 PASS.
-8. Do not proceed to M4 in the same turn unless explicitly instructed otherwise.
+M3 is PASS. On the next explicit implementation turn:
+1. Start **M4 — Render Facade** only.
+2. Wrap the current proven STEP10 -> Step08 -> V13 -> S11 -> FFmpegV2 chain behind RenderEngine before replacing any compiler/runtime owner.
+3. Preserve immutable render snapshot, preflight, progress/cancel, ffprobe verification, transactional publish, and software fallback behavior.
+4. Keep FFmpeg/ffprobe canonical.
+5. Do not start M5 Preview/Cache, M6 Beat Analysis, M7 Workspace Registry, or UI redesign in M4.
+6. Run focused render parity + real-FFmpeg Q0/Q1 evidence before reporting M4 PASS.
+7. Do not proceed to M5 in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.

@@ -1,6 +1,6 @@
 # M3 — ProjectPersistence
 
-Status: **IMPLEMENTED — validation pending**
+Status: **PASS — ProjectPersistence implemented and validated**
 
 ## Scope
 
@@ -152,3 +152,21 @@ current compatibility envelope.
 
 After M3 PASS, the next allowed migration phase is **M4 — Render Facade**.
 Do not proceed to M4 in the same turn.
+
+
+## Validation Evidence
+
+Validated M3 candidate:
+- commit: `4a7ac31a196365b5b639bd2e3ff3670cd28b5fad`
+- GitHub Actions run: `37588571955`
+- job: `m3-persistence`
+- Q0 compile: PASS
+- M0 + M1 + M2 + M3 contracts: **37 passed**
+- baseline atomic/project persistence: **8 passed**
+- STEP11 persistence lifecycle/integration core: **14 passed**
+- production canonical save: **1 passed**
+- nine-workspace launch characterization: **1 passed**
+- job conclusion: **success**
+
+The evidence/status commit that records this PASS must rerun the same M3 workflow
+on its own final head before M4 starts.

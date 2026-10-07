@@ -99,11 +99,22 @@ Implementation is now allowed, but has **not started yet**.
 - GitHub Actions run `37585385248`: 27 M0/M1/M2 contracts PASS, 7 legacy async stale/cancel tests PASS, 3 render/close lifecycle tests PASS, 9-workspace characterization PASS, authoritative-state/canonical-save shell PASS.
 - H3 ProcessSupervisor and H4 ApplicationLifecycleService remain future hardening work; they were not silently implemented here.
 
+## M3 Implementation Result — PASS
+- Branch: `impl-m3-persistence`
+- Added ProjectPersistence and wired it through CompositionRoot/AppKernel.
+- EditorWorkspace v2 open/save now routes through ProjectPersistence.
+- STEP11 canonical compatibility Save and recovery write/clear/classification route through ProjectPersistence.
+- Native v2 Save is stage -> semantic verify -> atomic publish.
+- Recovery classifications: CORRUPT / STALE / SAME / NEWER / FOREIGN.
+- Corrupt/foreign/stale recovery evidence is retained.
+- Legacy v1 migration IDs are deterministic from canonical payload.
+- GitHub Actions run `37588571955`: 37 M0–M3 contracts PASS, 8 baseline persistence tests PASS, 14 STEP11 persistence lifecycle/core tests PASS, production canonical Save PASS, nine-workspace characterization PASS.
+
 ## Next Work
-- M3: Persistence only.
-- Wrap existing proven save/load/recovery behavior behind ProjectPersistence before replacing direct paths.
-- Keep canonical Save atomic and recovery separate.
-- Do not proceed to M4 until M3 gate PASS.
+- M4: Render Facade only.
+- Wrap current STEP10 -> Step08 -> V13 -> S11 -> FFmpegV2 chain before replacing compiler ownership.
+- Keep FFmpeg/ffprobe canonical and preserve existing render safety contracts.
+- Do not proceed to M5 until M4 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -112,4 +123,5 @@ Implementation is now allowed, but has **not started yet**.
 - M0/T1 FeatureParityRegistry + characterization: PASS
 - M1 AppKernel/CompositionRoot: PASS
 - M2 Task Lifecycle/TaskSupervisor/TaskScope: PASS
-- Next operational action: M3 Persistence only; then report gate before M4.
+- M3 ProjectPersistence: PASS
+- Next operational action: M4 Render Facade only; then report gate before M5.
