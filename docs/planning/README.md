@@ -10,13 +10,13 @@
 - STEP 05 — Media, Preview, Cache, Timeline, Project Data — PASS
 - STEP 06 — Render Engine, Processing Pipeline, Long-Album Reliability — PASS
 - STEP 07 — Animation, Transition, Spectrum, Beat-Reactive, Preview/Render Parity — PASS
-- STEP 08 — Feature Parity, Enhancement, AI Agent Reliability — NEXT
-- STEP 09 — UI Preservation, Responsiveness, Integration Contract
+- STEP 08 — Feature Parity, Enhancement, AI Agent Reliability — PASS
+- STEP 09 — UI Preservation, Responsiveness, Integration Contract — NEXT
 - STEP 10 — Testing, Regression, Stress, Benchmark, Quality Gate
 - STEP 11 — Windows Portable Build, Release, Rollback, Final Handoff
 
 ## Current State
-STEP 07 is PASS. STEP 08 is next. Coding remains blocked.
+STEP 08 is PASS. STEP 09 is next. Coding remains blocked.
 
 ## STEP 03 Architecture Summary
 Target architecture is layered/ports-and-adapters with one AppKernel/CompositionRoot. Existing behavior is wrapped before replacement. Migration order is M0..M9 and every slice must be rollback-capable.
@@ -40,5 +40,20 @@ One RenderEngine path owns final rendering; immutable RenderSnapshot + RenderPla
 - Accurate Preview vs Final Render golden parity is mandatory for new effect families.
 - Non-reactive fallback is required when beat analysis is unavailable.
 - Preset catalog expands only after a small animation core is proven.
+
+## STEP 08 Feature / AI Summary
+- No user-facing baseline feature removal is authorized.
+- Baseline features are classified MUST KEEP / IMPROVE / DEFER.
+- Manual editor remains complete and authoritative.
+- AI provider is planner-only; local registry + dry-run + EditorController own mutations.
+- Current 9 STEP09 actions and 5 permission domains remain parity-protected.
+- ActionSpec V2 gains schema/capability/side-effect/preview/idempotency metadata.
+- `animation.write` is planned after STEP07 commands exist.
+- AI media path operations and AI direct render remain deferred.
+- Ambiguity/stale revision/context/permission failure produces zero mutation.
+- Preview Diff and Execute use the same command resolver.
+- One plan = one revision + one Undo.
+- Gemini 100-key pool reliability remains protected.
+- FeatureParityRegistry/test mapping becomes the implementation cleanup/removal gate.
 
 Detailed DOCX planning artifacts remain the canonical detailed references. Markdown files provide fast status/handoff summaries and do not replace the DOCX files.
