@@ -1,0 +1,255 @@
+name: V2 Q3 Infrastructure Quality Gate
+
+on:
+  push:
+    branches:
+      - quality-q3-infrastructure
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-ffmpeg-q3:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+    steps:
+      - name: Checkout Q3 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install FFmpeg and Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+      - name: Q3 real FFmpeg infrastructure matrix
+        timeout-minutes: 10
+        run: |
+          python -m pytest -q \
+            tests/test_v2_media_services.py::test_real_ffmpeg_media_probe_service_audio_duration \
+            tests/test_v2_beat_analysis.py::test_real_ffmpeg_detects_pulses_without_mutating_master_audio \
+            tests/test_v2_beat_analysis.py::test_real_ffmpeg_silence_stays_non_reactive \
+            tests/test_editor_v2_s12_performance.py::test_real_ffmpeg_accepts_external_filter_script \
+            tests/test_step10_render_real_ffmpeg.py \
+            tests/test_editor_v2_render.py::test_real_ffmpeg_two_song_background_text_and_accurate_preview \
+            tests/test_editor_v2_s05_spectrum.py::test_real_ffmpeg_all_release_spectrum_styles \
+            tests/test_editor_v2_s05_spectrum.py::test_real_silence_spectrum_and_accurate_preview_use_same_compiler
+
+  ui-capture-matrix-q3:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_SCALE_FACTOR: '1'
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+    steps:
+      - name: Checkout Q3 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install FFmpeg and Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+      - name: Capture all nine production workspaces
+        timeout-minutes: 10
+        run: |
+          mkdir -p q3-ui/current q3-ui/reports q3-ui/spectrum-evidence
+          python -m full_album_maker.home_capture --state recovery --output q3-ui/current/01-beranda.png --report q3-ui/reports/01-beranda.json
+          python -m full_album_maker.media_capture_final --state golden --output q3-ui/current/02-media.png --report q3-ui/reports/02-media.json
+          python -m full_album_maker.album_capture --state golden --output q3-ui/current/03-album.png --report q3-ui/reports/03-album.json
+          python -m full_album_maker.timeline_capture --state golden --output q3-ui/current/04-timeline.png --report q3-ui/reports/04-timeline.json
+          python -m full_album_maker.visual_capture_step06 --output q3-ui/current/05-visual.png --report q3-ui/reports/05-visual.json
+          python -m full_album_maker.template_capture_step07 --output q3-ui/current/06-template.png --report q3-ui/reports/06-template.json
+          python -m full_album_maker.spectrum_capture_step08 --output q3-ui/current/07-spectrum.png --report q3-ui/reports/07-spectrum.json --evidence-dir q3-ui/spectrum-evidence
+          python -m full_album_maker.ai_capture_step09 --output q3-ui/current/08-ai-agent.png --report q3-ui/reports/08-ai-agent.json
+          python -m full_album_maker.render_capture_step10 --output q3-ui/current/09-render.png --report q3-ui/reports/09-render.json
+      - name: Validate UI capture matrix
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          from PIL import Image
+
+          expected = [
+              ("01-beranda", "home"),
+              ("02-media", "media"),
+              ("03-album", "album"),
+              ("04-timeline", "timeline"),
+              ("05-visual", "visual"),
+              ("06-template", "template"),
+              ("07-spectrum", "spectrum"),
+              ("08-ai-agent", "ai_agent"),
+              ("09-render", "render"),
+          ]
+          matrix = []
+          for name, route in expected:
+              png = Path("q3-ui/current") / f"{name}.png"
+              report = Path("q3-ui/reports") / f"{name}.json"
+              assert png.is_file() and png.stat().st_size > 10_000, (png, png.stat().st_size if png.exists() else 0)
+              assert report.is_file(), report
+              with Image.open(png) as image:
+                  assert image.size == (1672, 941), (name, image.size)
+              data = json.loads(report.read_text(encoding="utf-8"))
+              geometry = data["geometry"]
+              assert geometry["window"] == [1672, 941], (name, geometry.get("window"))
+              assert geometry["workspace"] == route, (name, geometry.get("workspace"), route)
+              matrix.append({
+                  "name": name,
+                  "route": route,
+                  "bytes": png.stat().st_size,
+                  "sha256": hashlib.sha256(png.read_bytes()).hexdigest(),
+              })
+
+          manifest = json.loads(Path("docs/ui-reference/manifest.json").read_text(encoding="utf-8"))
+          assert len(manifest["references"]) == 9
+          summary = {
+              "status": "FUNCTIONAL_UI_CAPTURE_PASS",
+              "pixel_match_status": "NOT_CLAIMED",
+              "reason": "Exact binary goldens are not checked into this branch; STEP10 D10-13 separates functional UI PASS from pixel-match PASS.",
+              "captures": matrix,
+          }
+          Path("q3-ui/matrix.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          print("Q3_UI_CAPTURE_MATRIX_PASS")
+          PY
+      - name: Upload Q3 UI evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: q3-ui-capture-matrix
+          path: q3-ui/
+          if-no-files-found: error
+
+  structural-performance-q3:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout Q3 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+      - name: Q3 structural 200-song gate
+        run: |
+          python -m pytest -q \
+            tests/test_editor_v2_s12_performance.py::test_packed_200_song_three_hour_project_resolves_and_externalizes_graph \
+            tests/test_editor_v2_s12_performance.py::test_free_200_song_three_hour_project_resolves_and_uses_bounded_command
+      - name: Prepare same-runner Q2 baseline
+        run: |
+          git worktree add --detach q3-baseline e673bbcd2812a93c6bb59c36448d58b1215037b5
+          mkdir -p q3-benchmark
+      - name: Benchmark baseline and Q3 candidate
+        run: |
+          PYTHONPATH="$PWD/q3-baseline/src" python tests/q3_benchmark_runner.py --output q3-benchmark/baseline.json
+          PYTHONPATH="$PWD/src" python tests/q3_benchmark_runner.py --output q3-benchmark/candidate.json
+      - name: Compare same-runner performance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          baseline = json.loads(Path("q3-benchmark/baseline.json").read_text())
+          candidate = json.loads(Path("q3-benchmark/candidate.json").read_text())
+          metrics = (
+              "packed_resolve_ms",
+              "free_resolve_ms",
+              "packed_compile_ms",
+              "free_compile_ms",
+          )
+          comparison = {}
+          regressions = []
+          for key in metrics:
+              old = float(baseline[key])
+              new = float(candidate[key])
+              ratio = new / old if old > 0 else 1.0
+              delta_pct = (ratio - 1.0) * 100.0
+              comparison[key] = {
+                  "baseline": old,
+                  "candidate": new,
+                  "delta_percent": delta_pct,
+              }
+              if delta_pct > 10.0:
+                  regressions.append((key, delta_pct, old, new))
+          assert candidate["song_count"] == 200
+          assert abs(float(candidate["duration_seconds"]) - 10800.0) < 1e-9
+          assert not candidate["packed_errors"], candidate["packed_errors"]
+          assert not candidate["free_errors"], candidate["free_errors"]
+          result = {
+              "status": "PASS" if not regressions else "INVESTIGATE",
+              "baseline_commit": "e673bbcd2812a93c6bb59c36448d58b1215037b5",
+              "comparison": comparison,
+              "regressions_over_10_percent": regressions,
+          }
+          Path("q3-benchmark/comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+          print(json.dumps(result, indent=2))
+          assert not regressions, regressions
+          PY
+      - name: Upload Q3 benchmark evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: q3-structural-performance
+          path: q3-benchmark/
+          if-no-files-found: error
+
+  python311-compat-q3:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_SCALE_FACTOR: '1'
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+    steps:
+      - name: Checkout Q3 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install Linux Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+      - name: Q3 Python 3.11 compatibility lane
+        timeout-minutes: 20
+        run: python -m pytest -q
