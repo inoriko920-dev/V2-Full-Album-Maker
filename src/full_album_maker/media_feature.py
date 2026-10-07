@@ -60,11 +60,23 @@ def _refresh_media(self,reset=False):
         # Same in-memory project gaining/changing its canonical path means
         # First Save / Save As, not Open Project. Carry media metadata to the
         # new sidecar and merge against any destination records.
-        self._s03_store.rebind_project_path(
-            self._foundation_project_path or None,
-            carry_current=True,
-            persist=bool(self._foundation_project_path),
-        )
+        try:
+            self._s03_store.rebind_project_path(
+                self._foundation_project_path or None,
+                carry_current=True,
+                persist=bool(self._foundation_project_path),
+            )
+        except OSError as exc:
+            # Project Save/Save As remains authoritative even when auxiliary
+            # media metadata persistence is temporarily unavailable. Keep the
+            # current sidecar records dirty/in-memory and surface the problem.
+            self.log.appendPlainText(
+                f"Metadata Media belum dapat disimpan setelah perubahan path: {exc}"
+            )
+            if hasattr(self,'foundation_state'):
+                self.foundation_state.set_status(
+                    save=('Metadata media belum tersimpan','warning')
+                )
     elif reset and path is not None:
         # Explicit refresh of the same saved project should see the latest
         # sidecar written by another process. Unsaved projects keep their
