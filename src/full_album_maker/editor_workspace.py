@@ -56,6 +56,8 @@ class EditorWorkspace(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.session = EditorSession(document or ProjectDocument.new_empty())
         self.current_project_path = ""
+        self._canonical_project_path = ""
+        self._canonical_project_hash = ""
         self._last_dirty = self.session.is_dirty
         self._render_busy = False
         self._preview_busy = False
@@ -200,6 +202,17 @@ class EditorWorkspace(QWidget):
     def set_document(self, document: ProjectDocument, *, current_path: str = "") -> None:
         self.session.set_document(document)
         self.current_project_path = current_path
+        self._canonical_project_path = (
+            str(Path(current_path).resolve(strict=False)) if current_path else ""
+        )
+        try:
+            self._canonical_project_hash = (
+                DEFAULT_PROJECT_PERSISTENCE.document_hash_on_disk(current_path)
+                if current_path and Path(current_path).is_file()
+                else ""
+            )
+        except Exception:
+            self._canonical_project_hash = ""
         self.preview.clear_accurate_frame()
         self._refresh_all()
 
@@ -479,11 +492,28 @@ class EditorWorkspace(QWidget):
             if not path:
                 return False
         try:
+            target = Path(path)
+            if target.suffix.lower() != ".json":
+                target = target.with_suffix(".json")
+            resolved_target = str(target.resolve(strict=False))
+            if resolved_target == self._canonical_project_path:
+                expected_disk_hash = self._canonical_project_hash
+            else:
+                expected_disk_hash = (
+                    DEFAULT_PROJECT_PERSISTENCE.document_hash_on_disk(target)
+                    if target.is_file()
+                    else ""
+                )
             saved = DEFAULT_PROJECT_PERSISTENCE.save_document(
                 path,
                 self.session.snapshot(),
+                expected_disk_hash=expected_disk_hash,
             )
             self.current_project_path = saved
+            self._canonical_project_path = str(Path(saved).resolve(strict=False))
+            self._canonical_project_hash = (
+                DEFAULT_PROJECT_PERSISTENCE.document_hash_on_disk(saved)
+            )
             self.session.mark_saved()
             self._refresh_all()
             self._set_status(f"Proyek v2 disimpan: {Path(saved).name}")

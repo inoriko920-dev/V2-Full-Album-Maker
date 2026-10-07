@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import tempfile
 from typing import Callable
+from uuid import uuid4
 
 from .atomic_io import atomic_write_text
 from .editor_models import ProjectDocument
@@ -17,6 +18,121 @@ from .paths import data_dir
 
 RECOVERY_FORMAT = "full-album-maker-step11-recovery"
 RECOVERY_VERSION = 1
+_RECOVERY_SESSION_PREFIX = ".fam-recovery-session-"
+
+
+def _session_lock_handle(handle) -> bool:
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+
+    import fcntl
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _session_unlock_handle(handle) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+
+
+class RecoverySessionLease:
+    """OS-owned lease proving that one editor recovery session is still live."""
+
+    def __init__(self, root: str | Path, session_id: str = "") -> None:
+        self.root = Path(root)
+        self.session_id = str(session_id or uuid4().hex)
+        self.path = self.root / f"{_RECOVERY_SESSION_PREFIX}{self.session_id}.lock"
+        self._handle = None
+
+    def start(self) -> str:
+        if self._handle is not None:
+            return self.session_id
+        self.root.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+        handle = os.fdopen(fd, "r+b", buffering=0)
+        if os.fstat(handle.fileno()).st_size == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if not _session_lock_handle(handle):
+            handle.close()
+            raise ValueError("Gagal memperoleh recovery session lease.")
+        self._handle = handle
+        return self.session_id
+
+    def close(self) -> None:
+        handle = self._handle
+        self._handle = None
+        if handle is not None:
+            _session_unlock_handle(handle)
+            handle.close()
+        try:
+            self.path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def session_alive(self, session_id: str) -> bool:
+        session_id = str(session_id or "")
+        if not session_id:
+            return False
+        if session_id == self.session_id and self._handle is not None:
+            return True
+        path = self.root / f"{_RECOVERY_SESSION_PREFIX}{session_id}.lock"
+        if not path.exists():
+            return False
+        try:
+            fd = os.open(path, os.O_RDWR)
+            handle = os.fdopen(fd, "r+b", buffering=0)
+        except OSError:
+            return True
+        try:
+            handle.seek(0)
+            if not _session_lock_handle(handle):
+                return True
+            _session_unlock_handle(handle)
+        finally:
+            handle.close()
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+
+def recovery_path_for_session(
+    root: str | Path,
+    project_token_value: str,
+    session_id: str,
+) -> Path:
+    safe_token = "".join(
+        ch for ch in str(project_token_value) if ch.isalnum() or ch in "-_"
+    )[:64] or "unknown"
+    safe_session = "".join(
+        ch for ch in str(session_id) if ch.isalnum() or ch in "-_"
+    )[:64] or "legacy"
+    return Path(root) / f"{safe_token}.{safe_session}.json"
 
 
 @dataclass(frozen=True)
@@ -27,6 +143,7 @@ class AutosaveRequest:
     signature: str
     source_project_path: str
     document_payload: dict
+    owner_session_id: str = ""
 
     def document(self) -> ProjectDocument:
         return ProjectDocument.from_dict(deepcopy(self.document_payload))
@@ -55,6 +172,7 @@ class RecoveryEnvelope:
     source_project_path: str
     saved_at_utc: str
     document_payload: dict
+    owner_session_id: str = ""
 
     def document(self) -> ProjectDocument:
         document = ProjectDocument.from_dict(deepcopy(self.document_payload))
@@ -73,6 +191,7 @@ class RecoveryEnvelope:
             "signature": self.signature,
             "source_project_path": self.source_project_path,
             "saved_at_utc": self.saved_at_utc,
+            "owner_session_id": self.owner_session_id,
             "document": deepcopy(self.document_payload),
         }
 
@@ -92,6 +211,7 @@ class RecoveryEnvelope:
             source_project_path=str(raw.get("source_project_path", "")),
             saved_at_utc=str(raw.get("saved_at_utc", "")),
             document_payload=deepcopy(document_payload),
+            owner_session_id=str(raw.get("owner_session_id", "") or ""),
         )
         if not item.project_token or not item.signature:
             raise ValueError("Recovery tidak memiliki identity/signature.")
@@ -114,6 +234,7 @@ class IntegrationRecoveryStore:
             source_project_path=request.source_project_path,
             saved_at_utc=datetime.now(timezone.utc).isoformat(),
             document_payload=document.to_dict(),
+            owner_session_id=request.owner_session_id,
         )
         # Revalidate exact serialized envelope before publishing.
         RecoveryEnvelope.from_dict(envelope.to_dict())
@@ -160,7 +281,14 @@ class DebouncedAutosaveCoordinator:
     def status(self) -> AutosaveStatus:
         return self._status
 
-    def request(self, document: ProjectDocument, *, project_path: str = "", token: str = "") -> AutosaveRequest:
+    def request(
+        self,
+        document: ProjectDocument,
+        *,
+        project_path: str = "",
+        token: str = "",
+        owner_session_id: str = "",
+    ) -> AutosaveRequest:
         snapshot = document.clone()
         snapshot.validate()
         self._generation += 1
@@ -172,6 +300,7 @@ class DebouncedAutosaveCoordinator:
             signature=normalized_project_hash(snapshot),
             source_project_path=str(project_path or ""),
             document_payload=snapshot.to_dict(),
+            owner_session_id=str(owner_session_id or ""),
         )
         self._latest = request
         self._status = AutosaveStatus(
@@ -218,7 +347,13 @@ class DebouncedAutosaveCoordinator:
         return self._status
 
 
-def request_from_document(document: ProjectDocument, *, project_path: str = "", generation: int = 1) -> AutosaveRequest:
+def request_from_document(
+    document: ProjectDocument,
+    *,
+    project_path: str = "",
+    generation: int = 1,
+    owner_session_id: str = "",
+) -> AutosaveRequest:
     """Deterministic helper for recovery tests/tools without coordinator state."""
 
     snapshot = document.clone()
@@ -229,6 +364,7 @@ def request_from_document(document: ProjectDocument, *, project_path: str = "", 
         signature=normalized_project_hash(snapshot),
         source_project_path=str(project_path or ""),
         document_payload=snapshot.to_dict(),
+        owner_session_id=str(owner_session_id or ""),
     )
 
 
