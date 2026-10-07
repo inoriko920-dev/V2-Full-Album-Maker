@@ -20,6 +20,8 @@ from .integration_core_step11 import (
 from .integration_lifecycle_step11 import (
     DebouncedAutosaveCoordinator,
     AutosaveRequest,
+    RecoverySessionLease,
+    recovery_path_for_session,
 )
 from .project_persistence import (
     DEFAULT_PROJECT_PERSISTENCE,
@@ -36,9 +38,30 @@ class _IntegrationBridge(QObject):
     autosave_done = Signal(object, bool, str)
 
 
-def _recovery_path(token: str) -> Path:
-    safe = "".join(ch for ch in str(token) if ch.isalnum() or ch in "-_" )[:64] or "unknown"
-    return data_dir() / "recovery" / "step11" / f"{safe}.json"
+def _recovery_root() -> Path:
+    return data_dir() / "recovery" / "step11"
+
+
+def _safe_token(token: str) -> str:
+    return "".join(
+        ch for ch in str(token) if ch.isalnum() or ch in "-_"
+    )[:64] or "unknown"
+
+
+def _recovery_path(token: str, session_id: str) -> Path:
+    return recovery_path_for_session(_recovery_root(), token, session_id)
+
+
+def _recovery_candidates(token: str) -> tuple[Path, ...]:
+    root = _recovery_root()
+    if not root.is_dir():
+        return ()
+    safe = _safe_token(token)
+    values = list(root.glob(f"{safe}.*.json"))
+    legacy = root / f"{safe}.json"
+    if legacy.is_file():
+        values.append(legacy)
+    return tuple(sorted(set(values)))
 
 
 def _project_path(self) -> str:
@@ -88,6 +111,18 @@ def _sync_foundation_status(self) -> None:
 
 def _bind_project(self, document, *, clear_selection: bool = True) -> None:
     self._s11_project_token = self._s11_current_token()
+    canonical_path = self._s11_project_path()
+    self._s11_canonical_path = (
+        str(Path(canonical_path).resolve(strict=False)) if canonical_path else ""
+    )
+    try:
+        self._s11_canonical_hash = (
+            DEFAULT_PROJECT_PERSISTENCE.document_hash_on_disk(canonical_path)
+            if canonical_path and Path(canonical_path).is_file()
+            else ""
+        )
+    except Exception:
+        self._s11_canonical_hash = normalized_project_hash(document)
     self.selection_store.bind_project(self._s11_project_token, clear=clear_selection)
     self._s11_previous_document = document.clone()
     self._s11_last_seen_revision = document.revision
@@ -153,6 +188,7 @@ def _document_changed(self, document) -> None:
             current,
             project_path=self._s11_project_path(),
             token=self._s11_project_token,
+            owner_session_id=self._s11_recovery_session.session_id,
         )
         self._s11_autosave_timer.start()
     else:
@@ -213,7 +249,10 @@ def _schedule_autosave_flush(self) -> None:
         DomainEventType.AUTOSAVE_STATUS,
         payload={"state": "WRITING", "revision": request.revision},
     )
-    path = _recovery_path(request.project_token)
+    path = _recovery_path(
+        request.project_token,
+        request.owner_session_id or self._s11_recovery_session.session_id,
+    )
 
     def work() -> tuple[AutosaveRequest, bool, str]:
         try:
@@ -254,7 +293,10 @@ def _autosave_done(self, request: AutosaveRequest, success: bool, error: str) ->
 
 def _clear_recovery(self) -> None:
     DEFAULT_PROJECT_PERSISTENCE.clear_recovery(
-        _recovery_path(self._s11_project_token)
+        _recovery_path(
+            self._s11_project_token,
+            self._s11_recovery_session.session_id,
+        )
     )
     self._s11_autosave = DebouncedAutosaveCoordinator()
     self._s11_autosave_timer.stop()
@@ -279,6 +321,8 @@ def _mark_compatibility_persisted(self, path: str = "") -> None:
 
 def _mark_saved_after_publish(self, path: str) -> bool:
     self.editor_workspace.session.mark_saved()
+    self._s11_canonical_path = str(Path(path).resolve(strict=False))
+    self._s11_canonical_hash = DEFAULT_PROJECT_PERSISTENCE.document_hash_on_disk(path)
     self._s11_mark_compatibility_persisted(path)
     self._s11_clear_recovery()
     self._s11_previous_document = self.editor_workspace.document()
@@ -305,10 +349,22 @@ def _foundation_save_project(self) -> bool:
             return False
     self.foundation_state.set_status(save=("Menyimpan…", "warning"))
     try:
+        resolved_target = str(Path(path).with_suffix(".json").resolve(strict=False))
+        if resolved_target == str(getattr(self, "_s11_canonical_path", "") or ""):
+            expected_disk_hash = str(
+                getattr(self, "_s11_canonical_hash", "") or ""
+            )
+        else:
+            expected_disk_hash = (
+                DEFAULT_PROJECT_PERSISTENCE.document_hash_on_disk(path)
+                if Path(path).with_suffix(".json").is_file()
+                else ""
+            )
         saved = DEFAULT_PROJECT_PERSISTENCE.save_compatibility(
             path,
             self.project,
             expected,
+            expected_disk_hash=expected_disk_hash,
         )
         self._foundation_project_path = str(saved)
         try:
@@ -343,37 +399,64 @@ def _adopt(self, project, result, *, route="media", add_recent=True):
 
 
 def _maybe_offer_recovery(self, canonical_document) -> bool:
-    recovery_path = _recovery_path(self._s11_project_token)
-    assessment = DEFAULT_PROJECT_PERSISTENCE.assess_recovery(
-        recovery_path,
-        canonical_document,
-        canonical_path=self._s11_project_path(),
+    candidates = []
+    for recovery_path in _recovery_candidates(self._s11_project_token):
+        assessment = DEFAULT_PROJECT_PERSISTENCE.assess_recovery(
+            recovery_path,
+            canonical_document,
+            canonical_path=self._s11_project_path(),
+        )
+        if assessment is None:
+            continue
+
+        owner_session_id = (
+            assessment.envelope.owner_session_id
+            if assessment.envelope is not None
+            else ""
+        )
+        if owner_session_id and self._s11_recovery_session.session_alive(
+            owner_session_id
+        ):
+            # Never offer, delete or classify another live instance's autosave as
+            # abandoned recovery evidence.
+            continue
+
+        if assessment.classification == RecoveryClassification.SAME:
+            DEFAULT_PROJECT_PERSISTENCE.clear_recovery(recovery_path)
+            continue
+
+        if assessment.classification in {
+            RecoveryClassification.CORRUPT,
+            RecoveryClassification.STALE,
+            RecoveryClassification.FOREIGN,
+        }:
+            # Keep diagnostic evidence. Only a dead-session NEWER candidate may
+            # enter the recovery UX.
+            continue
+
+        if (
+            assessment.classification == RecoveryClassification.NEWER
+            and assessment.envelope is not None
+            and assessment.document is not None
+        ):
+            candidates.append((recovery_path, assessment))
+
+    if not candidates:
+        return False
+
+    # Prefer the highest authoritative revision. saved_at_utc only breaks ties
+    # between independent dead sessions at the same revision.
+    candidates.sort(
+        key=lambda item: (
+            item[1].envelope.revision,
+            item[1].envelope.saved_at_utc,
+        ),
+        reverse=True,
     )
-    if assessment is None:
-        return False
-
-    if assessment.classification == RecoveryClassification.SAME:
-        # Same content is redundant, not recovery evidence we need to retain.
-        DEFAULT_PROJECT_PERSISTENCE.clear_recovery(recovery_path)
-        return False
-
-    if assessment.classification in {
-        RecoveryClassification.CORRUPT,
-        RecoveryClassification.STALE,
-        RecoveryClassification.FOREIGN,
-    }:
-        # Never silently delete corrupt/foreign/stale evidence. They are ignored
-        # for current UX and remain available for diagnostics/manual recovery.
-        return False
-
+    _candidate_path, assessment = candidates[0]
     candidate = assessment.envelope
     recovered = assessment.document
-    if (
-        assessment.classification != RecoveryClassification.NEWER
-        or candidate is None
-        or recovered is None
-    ):
-        return False
+    assert candidate is not None and recovered is not None
 
     if str(os.environ.get("FAM_STEP11_NO_RECOVERY_PROMPT", "")).strip() == "1":
         self.foundation_state.set_status(save=("Recovery tersedia", "warning"))
@@ -433,7 +516,12 @@ def _close_event(self, event) -> None:
         # owner once Foundation/ProjectDocument STEP11 is active.
         self._s11_mark_compatibility_persisted(self._s11_project_path())
 
-    return _originals["close_event"](self, event)
+    result = _originals["close_event"](self, event)
+    if event.isAccepted():
+        recovery_session = getattr(self, "_s11_recovery_session", None)
+        if recovery_session is not None:
+            recovery_session.close()
+    return result
 
 
 def _ai_selected_song_ids(self) -> tuple[str, ...]:
@@ -450,6 +538,12 @@ def _ai_selected_song_ids(self) -> tuple[str, ...]:
 
 def _init(self, *args, **kwargs) -> None:
     _originals["window_init"](self, *args, **kwargs)
+    self._s11_recovery_session = RecoverySessionLease(_recovery_root())
+    self._s11_recovery_session.start()
+    recovery_session = self._s11_recovery_session
+    self.destroyed.connect(
+        lambda *_args, recovery_session=recovery_session: recovery_session.close()
+    )
     self.event_hub = DomainEventHub()
     document = self.editor_workspace.document()
     self._s11_project_token = project_token(document, self._s11_project_path())
