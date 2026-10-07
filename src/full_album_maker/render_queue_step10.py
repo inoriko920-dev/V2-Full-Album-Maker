@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import shutil
-from typing import Iterable
+import time
+from typing import Iterable, Iterator
 from uuid import uuid4
 
 from .atomic_io import atomic_write_text
@@ -42,6 +44,74 @@ _TERMINAL_HISTORY_STATES = {
     RenderJobState.BLOCKED,
     RenderJobState.INTERRUPTED,
 }
+
+_QUEUE_LOCK_TIMEOUT_SECONDS = 2.0
+_SESSION_LOCK_PREFIX = ".fam-queue-session-"
+
+
+def _job_key(job: RenderJob) -> tuple[str, str]:
+    return (job.job_id, job.attempt_id)
+
+
+def _lock_handle(handle) -> bool:
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+
+    import fcntl
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock_handle(handle) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+
+
+@contextmanager
+def _queue_file_lock(path: Path) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    handle = os.fdopen(fd, "r+b", buffering=0)
+    try:
+        if os.fstat(handle.fileno()).st_size == 0:
+            handle.write(b"0")
+            handle.flush()
+        deadline = time.monotonic() + _QUEUE_LOCK_TIMEOUT_SECONDS
+        while not _lock_handle(handle):
+            if time.monotonic() >= deadline:
+                raise ValueError(
+                    "Render Queue sedang dipersist oleh instance aplikasi lain. "
+                    "Coba lagi sesaat."
+                )
+            time.sleep(0.02)
+        try:
+            yield
+        finally:
+            _unlock_handle(handle)
+    finally:
+        handle.close()
 
 
 def _bounded_history(jobs: Iterable[RenderJob]) -> list[RenderJob]:
