@@ -59,6 +59,7 @@ class EditorWorkspace(QWidget):
         self._last_dirty = self.session.is_dirty
         self._render_busy = False
         self._preview_busy = False
+        self._async_closed = False
 
         self.bridge = _AsyncBridge(self)
         self.bridge.previewReady.connect(self._preview_ready)
@@ -492,7 +493,7 @@ class EditorWorkspace(QWidget):
             return False
 
     def render_accurate_preview(self) -> None:
-        if self._preview_busy:
+        if self._preview_busy or self._async_closed:
             return
         self._preview_busy = True
         self.preview_btn.setEnabled(False)
@@ -500,24 +501,27 @@ class EditorWorkspace(QWidget):
         tick = self.session.playhead_tick
         target = temp_dir() / f"preview-v2-{snapshot.project_id}.png"
         preview_engine = current_preview_engine() or DEFAULT_PREVIEW_ENGINE
+        bridge = self.bridge
 
         def worker() -> None:
             try:
                 result = preview_engine.render_frame(snapshot, tick, target)
-                self.bridge.previewReady.emit(result)
+                bridge.previewReady.emit(result)
             except Exception as exc:
-                self.bridge.error.emit(f"Preview akurat gagal: {exc}")
+                bridge.error.emit(f"Preview akurat gagal: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _preview_ready(self, path: str) -> None:
+        if self._async_closed:
+            return
         self._preview_busy = False
         self.preview_btn.setEnabled(True)
         self.preview.set_accurate_frame(path)
         self._set_status("Preview Akurat diperbarui dari compiler render yang sama.")
 
     def render_project(self) -> None:
-        if self._render_busy:
+        if self._render_busy or self._async_closed:
             return
         destination, _ = QFileDialog.getSaveFileName(
             self,
@@ -530,22 +534,27 @@ class EditorWorkspace(QWidget):
         self._render_busy = True
         self.render_btn.setEnabled(False)
         snapshot = self.session.snapshot()
+        bridge = self.bridge
 
         def worker() -> None:
             try:
-                result = EditorRenderService().render(snapshot, destination, log=self.bridge.log.emit)
-                self.bridge.renderDone.emit(result)
+                result = EditorRenderService().render(snapshot, destination, log=bridge.log.emit)
+                bridge.renderDone.emit(result)
             except Exception as exc:
-                self.bridge.error.emit(f"Render v2 gagal: {exc}")
+                bridge.error.emit(f"Render v2 gagal: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _render_done(self, path: str) -> None:
+        if self._async_closed:
+            return
         self._render_busy = False
         self.render_btn.setEnabled(True)
         self._set_status(f"Render v2 selesai: {Path(path).name}")
 
     def _async_error(self, message: str) -> None:
+        if self._async_closed:
+            return
         self._preview_busy = False
         self._render_busy = False
         self.preview_btn.setEnabled(True)
@@ -553,8 +562,28 @@ class EditorWorkspace(QWidget):
         self._set_status(message)
 
     def _set_status(self, message: str) -> None:
+        if self._async_closed:
+            return
         self.status.setText(str(message))
         self.statusMessage.emit(str(message))
+
+    def shutdown_async(self) -> None:
+        """Suppress all late async delivery after an accepted close."""
+        if self._async_closed:
+            return
+        self._async_closed = True
+        self._preview_busy = False
+        self._render_busy = False
+        self.play_timer.stop()
+
+    def closeEvent(self, event) -> None:
+        super().closeEvent(event)
+        try:
+            accepted = bool(event.isAccepted())
+        except Exception:
+            accepted = True
+        if accepted:
+            self.shutdown_async()
 
     def keyPressEvent(self, event) -> None:
         focus = self.focusWidget()
