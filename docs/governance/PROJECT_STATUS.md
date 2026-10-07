@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-PLANNING COMPLETE — PRE-IMPLEMENTATION DOCUMENTATION GATE
+IMPLEMENTATION READY — PRE-CODING DOCUMENTATION GATE PASS
 
 ## Current STEP
-STEP 11 — Windows Portable Build, Release, Rollback, dan Final Handoff
+PRE-CODING DOCUMENTATION GATE — PASS; M0/T1 READY (NOT STARTED)
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,17 +37,17 @@ STEP 11 — Windows Portable Build, Release, Rollback, dan Final Handoff
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-BLOCKED — pre-coding source-of-truth upload gate is still pending.
+UNLOCKED BY DOCUMENTATION GATE — implementation is ready, but no implementation coding has started yet.
 
-No STEP 11 source-code, workflow, build-script, dependency, UI, renderer, schema, version, or release mutation was made.
+Canonical MASTER + STEP00–11 DOCX binaries are present at `docs/planning/source-of-truth/`, verified 13/13 by exact Git blob identity against local canonical bytes, whose SHA-256 values match `PLANNING_ARTIFACTS_MANIFEST.md`. No application source, workflow, dependency, UI, renderer, schema, version, or release mutation was made by this gate.
 
-## Next Operational Gate
-Before implementation:
-1. Physically place the canonical MASTER + STEP 00–11 final DOCX files in the V2 repository.
-2. Verify every DOCX SHA-256 against `docs/planning/PLANNING_ARTIFACTS_MANIFEST.md`.
-3. Exclude obsolete duplicate drafts.
-4. Re-check governance/status/handoff.
-5. Only then unlock implementation, starting at M0/T1 FeatureParityRegistry/characterization, followed by additive M1 AppKernel/CompositionRoot.
+## Next Operational Step
+Documentation gate is PASS. On the next explicit implementation turn:
+1. Start **M0/T1 — FeatureParityRegistry + characterization map** only.
+2. Preserve all STEP01 behavior contracts and STEP08 MUST KEEP features.
+3. Do not refactor application architecture yet beyond what M0/T1 requires.
+4. After M0/T1 gate PASS, proceed later to additive M1 AppKernel/CompositionRoot.
+5. Continue one bounded migration slice per turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.
