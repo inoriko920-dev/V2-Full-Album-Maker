@@ -4,7 +4,7 @@
 PLANNING
 
 ## Current STEP
-STEP 08 — Feature Parity, Enhancement, dan AI Agent Reliability
+STEP 09 — UI Preservation, Responsiveness, dan Integration Contract
 
 ## Gate Status
 - STEP 00: PASS
@@ -16,39 +16,39 @@ STEP 08 — Feature Parity, Enhancement, dan AI Agent Reliability
 - STEP 06: PASS
 - STEP 07: PASS
 - STEP 08: PASS
+- STEP 09: PASS
 
-## STEP 08 Final Feature/AI Direction
-- No user-facing baseline feature is authorized for removal.
-- Baseline capabilities default to MUST KEEP.
-- IMPROVE is additive/backward-compatible; DEFER does not block first stable V2.
-- Internal legacy implementations may be removed only after replacement + parity evidence.
-- Manual/offline editor remains authoritative and complete.
-- AI provider is an intent planner only; local registry/dry-run/EditorController own all mutations.
-- Current STEP09 safe baseline remains: 9 whitelisted actions, 5 write permissions, bounded sanitized context, revision/context fingerprint guards, Preview Diff, one transaction Undo, idempotent plan IDs.
-- ActionSpec V2 will add schema, capability, side-effect class, preview, and idempotency metadata.
-- `animation.write` is added only after STEP07 animation commands exist.
-- AI media filesystem actions and direct render request remain deferred.
-- Ambiguity, unknown targets, stale revision/context, or permission mismatch produce zero mutation.
-- Preview Diff and Execute must share the same resolver/domain commands.
-- Final human-language responses must be grounded in local execution evidence, not provider claims.
-- 100-key Gemini pool behavior remains with DPAPI, cooldown/failover, corrupt-vault quarantine, and redaction.
-- AI direct render remains deferred until RenderEngine is production-proven and explicit render.request permission is designed.
+## STEP 09 Final UI Direction
+- V2 preserves the existing production UI/workflow; this is not a redesign.
+- All 9 routes remain: Beranda, Media, Album, Timeline, Visual, Template, Spectrum, AI Agent, Render.
+- Existing shell composition remains recognizable: command bar, navigation, context, center workspace, right inspector/AI dock, timeline, status bar.
+- WorkspaceRegistry/WorkspaceBundle becomes the explicit route/lifecycle owner.
+- Runtime UI patch/install ownership retires route-by-route only after visual/state parity.
+- Heavy FFmpeg/ffprobe, media scan/probe, Accurate Preview, BeatAnalysis, Gemini/network, cache generation, render verification/publish work must not run on the UI thread.
+- Global command/status state is derived from ProjectSession/application services.
+- Required responsive evidence includes 1672/100%, 1366/100%, 125%, and 150%.
+- Current production UI is the migration no-regression baseline.
+- Frozen canonical 1672x941 goldens remain immutable reference evidence.
+- Historical pixel-match remediation is separate from architecture migration unless explicitly requested.
+- No new UI-image prompt/reference set is required because this V2 scope preserves the existing UI.
+- AI Agent preserves Send → Preview Diff → Execute confirmation → Cancel → Undo state truth.
+- Render Center reports completion only from verified/published RenderEngine state.
 
 ## Coding Status
 BLOCKED — planning phase.
 
-No STEP 08 source-code, dependency, UI, schema, renderer, AI registry, provider, or project-format implementation change was made.
+No STEP 09 source-code, dependency, UI implementation, schema, renderer, or project-format change was made.
 
 ## Next STEP
-STEP 09 — UI Preservation, Responsiveness, dan Integration Contract.
+STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate.
 
-STEP 09 must preserve all nine user-visible workspaces and MUST KEEP feature access while removing UI-thread blocking and reducing runtime patch-order coupling. It is still planning; no UI redesign/coding is authorized yet.
+STEP 10 must define the full test pyramid, feature/behavior regression matrix, concurrency/fault injection, long-album stress, UI visual/responsive evidence, performance budgets, real-FFmpeg tests, Windows portable gates, and release-blocking acceptance criteria. It remains planning.
 
 ## Canonical References
 - Master planning DOCX.
-- STEP 00–08 planning DOCX files.
-- `docs/planning/STEP_08_FEATURE_PARITY_AI_RELIABILITY.md`
-- `docs/planning/STEP_08_ARTIFACT_INTEGRITY.txt`
-- prior STEP 01–07 planning summaries/integrity files.
+- STEP 00–09 planning DOCX files.
+- `docs/planning/STEP_09_UI_PRESERVATION_RESPONSIVENESS_DAN_INTEGRATION_CONTRACT.md`
+- `docs/planning/STEP_09_ARTIFACT_INTEGRITY.txt`
+- prior STEP 01–08 planning summaries/integrity files.
 - `docs/governance/PROJECT_GOVERNANCE.md`
 - `docs/governance/AI_HANDOFF.md`
