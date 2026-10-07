@@ -279,3 +279,37 @@ def test_fallback_backup_is_published_only_after_complete_copy(
     assert not list(tmp_path.glob(".*.fam-backup-*"))
     assert not list(tmp_path.glob(".*.copying-*.tmp"))
     assert not list(tmp_path.glob(f"{JOURNAL_PREFIX}*{JOURNAL_SUFFIX}"))
+
+
+
+def test_recovery_removes_crash_orphaned_fallback_backup_copy(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "album.mp4"
+    target.write_bytes(b"old-good-video")
+    stage = tmp_path / "stage-new.mp4"
+    stage.write_bytes(b"new-unpublished-video")
+
+    bundle_id = "powerloss"
+    backup = tmp_path / f".{target.name}.fam-backup-{bundle_id}"
+    orphan_copy = tmp_path / f".{backup.name}.copying-deadbeef.tmp"
+    orphan_copy.write_bytes(b"partial-large-backup")
+
+    journal = tmp_path / f"{JOURNAL_PREFIX}{bundle_id}{JOURNAL_SUFFIX}"
+    entries = [
+        {
+            "stage": str(stage),
+            "target": str(target),
+            "backup": str(backup),
+            "had_original": True,
+        }
+    ]
+    _write_journal(journal, "preparing", entries)
+
+    recover_interrupted_bundles(tmp_path)
+
+    assert target.read_bytes() == b"old-good-video"
+    assert not stage.exists()
+    assert not backup.exists()
+    assert not orphan_copy.exists()
+    assert not journal.exists()
