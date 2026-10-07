@@ -1,0 +1,60 @@
+name: V2 M1 AppKernel validation
+
+on:
+  push:
+    branches:
+      - impl-m1-app-kernel
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m1-app-kernel:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_SCALE_FACTOR: '1'
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+
+    steps:
+      - name: Checkout M1 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Linux Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Q0 compile
+        run: |
+          python -m compileall -q             src             tests/test_v2_app_kernel.py             tests/test_v2_feature_parity_registry.py
+
+      - name: Q0 M0 registry + M1 kernel contracts
+        run: |
+          python -m pytest -q             tests/test_v2_feature_parity_registry.py             tests/test_v2_app_kernel.py             tests/test_editor_v2_main_entrypoint.py
+
+      - name: Q1 nine-workspace launch characterization
+        run: |
+          python -m pytest -q             tests/test_step11_e2e.py::test_nine_workspace_navigation_is_read_only_in_production_subprocess
+
+      - name: Q1 authoritative-state production shell
+        run: |
+          python -m pytest -q             tests/test_step11_production_integration.py::test_step11_production_shell_uses_one_state_and_canonical_save
