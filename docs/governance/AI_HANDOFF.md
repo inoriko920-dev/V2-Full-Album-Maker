@@ -2,48 +2,56 @@
 
 Before doing any work:
 
-1. Confirm the target repository is `inoriko920-dev/V2-Full-Album-Maker`.
-2. Do not write to `inoriko920-dev/Full-Album-Maker`.
+1. Confirm target repository is `inoriko920-dev/V2-Full-Album-Maker`.
+2. Never write to `inoriko920-dev/Full-Album-Maker`.
 3. Read:
    - `docs/governance/PROJECT_GOVERNANCE.md`
    - `docs/governance/PROJECT_STATUS.md`
    - `docs/planning/README.md`
    - `docs/planning/STEP_01_AUDIT_SUMMARY.md`
    - `docs/planning/STEP_02_DECISIONS.md`
-   - the Master Plan DOCX
-   - every completed STEP DOCX in order
-4. Check current STEP and gate status before acting.
-5. Do not skip planning gates.
-6. Preserve STEP 01 behavior contracts C-01..C-20.
-7. Do not redesign UI/workflow merely because an external project has a stronger engine.
-8. External projects/components remain references/candidates until license, packaging, parity, benchmark, and rollback gates pass.
-9. Keep every future implementation reversible and test-protected.
-10. If an implementation needs an architecture decision not covered by approved planning, stop and document it first.
+   - `docs/planning/STEP_03_ARCHITECTURE_DECISIONS.md`
+   - Master Plan DOCX and every completed STEP DOCX in order.
+4. Preserve STEP 01 behavior contracts C-01..C-20.
+5. Preserve STEP 02 adoption decisions.
+6. Preserve STEP 03 dependency direction and M0..M9 migration order.
+7. Do not skip planning gates.
+8. Do not redesign UI/workflow merely because another architecture looks cleaner.
+9. Every future implementation must remain reversible and test-protected.
+10. If a required architecture decision is not covered by approved planning, stop and document it first.
 
-## Frozen Architecture Facts from STEP 01
-- Production startup installs 30 runtime compatibility/feature patches before constructing the final window.
-- ProjectDocument plus EditorController/EditorSession is the authoritative editor state/history owner.
-- Legacy Project is a compatibility/persistence bridge, not a second authoritative editor.
-- Production render path is Step10 RenderExecutor -> Step08FFmpegCompiler -> V13FFmpegCompiler -> S11FFmpegCompiler -> FFmpegV2Compiler.
-- Render jobs use immutable snapshots, critical preflight, ffprobe verification, and transactional publication.
-- AI remains optional, sanitized, fail-closed, and executes mutations locally through validated actions.
-- Manual/offline editing and rendering must remain available.
+## Frozen Architecture Facts
+- ProjectDocument + EditorController/EditorSession remain authoritative.
+- Legacy Project is compatibility only and must not regain ownership.
+- FFmpeg/ffprobe remain canonical render/probe infrastructure.
+- Production render semantics remain the current Step10 -> Step08 -> V13 -> S11 -> FFmpegV2 chain until facade parity is proven.
+- Manual/offline editing and rendering remain first-class.
+- AI remains optional, sanitized, fail-closed, and locally executed through validated commands.
+- Save/output publication remains atomic/transactional and recovery remains separate.
 
-## STEP 02 Adoption Decisions
-- KEEP: FFmpeg/ffprobe, PySide6/Qt, current V2 repo as foundation.
-- CANDIDATE: NumPy 2.3.x for future BeatAnalysisService after benchmarks.
-- DEFER: SciPy, PyAV.
-- REFERENCE-ONLY: MLT, libopenshot, imageio-ffmpeg, MoviePy, librosa.
-- POST-V2 OPTIONAL: projectM as isolated visualizer/plugin only.
-- REJECT CORE: aubio, Essentia.
-- Python >=3.11 remains the initial baseline.
-- Do not bundle a second FFmpeg without an explicit approved reason.
+## STEP 03 Target Boundaries
+- AppKernel / CompositionRoot
+- ProjectSession
+- WorkspaceRegistry
+- TaskSupervisor / TaskScope
+- CapabilityRegistry
+- MediaProbeService
+- CacheManager
+- PreviewEngine
+- RenderEngine
+- ProjectPersistence
+- BeatAnalysisService
+- AIPlanningService
+
+## Migration Rule
+Wrap current proven behavior first. Route one path through the facade. Prove parity. Only then retire the old direct path. Never dual-write project state.
 
 ## Current Handoff
 - Phase: PLANNING
-- Current completed STEP: STEP 02
-- STEP 00 Gate: PASS
-- STEP 01 Gate: PASS
-- STEP 02 Gate: PASS
-- Next STEP: STEP 03 — Target Architecture V2 dan Strategi Migrasi Bertahap
+- Completed through: STEP 03
+- STEP 00: PASS
+- STEP 01: PASS
+- STEP 02: PASS
+- STEP 03: PASS
+- Next: STEP 04 — Hardening Stabilitas, Lifecycle, Error Handling, dan Recovery
 - Coding: BLOCKED

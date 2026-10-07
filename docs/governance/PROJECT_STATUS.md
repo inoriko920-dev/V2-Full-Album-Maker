@@ -4,52 +4,52 @@
 PLANNING
 
 ## Current STEP
-STEP 02 — Riset Pondasi Matang, Lisensi, dan Keputusan Adopsi
+STEP 03 — Target Architecture V2 dan Strategi Migrasi Bertahap
 
 ## Gate Status
 - STEP 00: PASS
 - STEP 01: PASS
 - STEP 02: PASS
+- STEP 03: PASS
 
-## STEP 02 Final Decisions
-- Current V2 repository remains the application foundation; no external repo replaces it wholesale.
-- FFmpeg/ffprobe remain the canonical final render/probe engine.
-- PySide6/Qt remains the desktop UI toolkit.
-- MLT Framework is architecture reference only.
-- OpenShot/libopenshot is reference only for reader/cache/lifecycle/animation/beat-sync patterns.
-- PyAV is deferred; do not upgrade Python merely to adopt it.
-- imageio-ffmpeg and MoviePy are reference only, not runtime render foundations.
-- projectM is only a possible isolated post-V2 visualizer/plugin after the core is stable.
-- NumPy 2.3.x is the primary candidate for a future BeatAnalysisService, subject to Windows/PyInstaller/size/performance gates.
-- SciPy is deferred until measured need exists.
-- librosa is a development/research oracle, not a portable runtime dependency.
-- aubio and Essentia are rejected for the core/distribution license profile.
-- Python >=3.11 remains the initial stabilization baseline.
-- Third-party binary/license compliance is a release quality gate.
+## STEP 03 Final Architecture Direction
+- Current V2 repo remains the product foundation.
+- Architecture style: layered + ports/adapters + explicit CompositionRoot/AppKernel.
+- Migration style: strangler / adapter-first / rollback-capable.
+- ProjectDocument + EditorController remain authoritative.
+- ProjectSession becomes the runtime owner for one active project.
+- TaskSupervisor/TaskScope becomes the async lifecycle boundary.
+- WorkspaceRegistry replaces runtime patch ownership one route at a time.
+- FFmpeg/ffprobe remain canonical render/probe infrastructure.
+- PreviewEngine and RenderEngine initially wrap current proven implementation.
+- ProjectPersistence isolates save/migrate/recovery and legacy compatibility.
+- BeatAnalysisService is additive and technology-neutral at project-format level.
+- AIPlanningService separates provider/network from validation/execution.
+- CacheManager unifies cache policy/namespace/invalidation.
+- No new large runtime dependency is authorized for M1–M5.
 
-## Beat/Animation Direction
-Future planning may introduce:
-`bundled FFmpeg PCM decode -> BeatAnalysisService -> fingerprinted analysis cache -> BeatResponse curves -> Preview/Render consumers`.
-
-This does not authorize implementation yet. Beat analysis must not alter audio timing, and preview/final render must consume the same deterministic analysis data.
+## Migration Phases
+M0 Characterization -> M1 Composition Root -> M2 Task Lifecycle -> M3 Persistence -> M4 Render Facade -> M5 Probe/Preview/Cache -> M6 Beat Analysis -> M7 Workspace Registry -> M8 Legacy Bridge Retirement -> M9 Consolidation.
 
 ## Coding Status
 BLOCKED — planning phase.
 
-No STEP 02 source-code, dependency, UI, schema, renderer, or workflow implementation changes were made.
+No STEP 03 source-code, dependency, UI, schema, renderer, workflow, or project-format implementation change was made.
 
 ## Next STEP
-STEP 03 — Target Architecture V2 dan Strategi Migrasi Bertahap.
+STEP 04 — Hardening Stabilitas, Lifecycle, Error Handling, dan Recovery.
 
-STEP 03 must design adapter/facade boundaries and an incremental migration path while preserving STEP 01 behavior contracts and STEP 02 adoption decisions.
+STEP 04 must define failure matrices, shutdown/project-switch ordering, cancellation, stale-result guards, crash/recovery behavior, typed errors, fault injection, and diagnostics.
 
 ## Canonical References
 - Master planning DOCX.
 - STEP 00 DOCX.
 - STEP 01 DOCX.
 - STEP 02 DOCX.
-- `docs/planning/STEP_01_AUDIT_SUMMARY.md`
-- `docs/planning/STEP_02_DECISIONS.md`
-- `docs/planning/STEP_02_ARTIFACT_INTEGRITY.txt`
-- `PROJECT_GOVERNANCE.md`
-- `AI_HANDOFF.md`
+- STEP 03 DOCX.
+- docs/planning/STEP_01_AUDIT_SUMMARY.md
+- docs/planning/STEP_02_DECISIONS.md
+- docs/planning/STEP_03_ARCHITECTURE_DECISIONS.md
+- docs/planning/STEP_03_ARTIFACT_INTEGRITY.txt
+- docs/governance/PROJECT_GOVERNANCE.md
+- docs/governance/AI_HANDOFF.md
