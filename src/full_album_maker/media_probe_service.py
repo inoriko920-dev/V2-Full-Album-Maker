@@ -34,6 +34,7 @@ class SourceFingerprint:
     locator: str
     size_bytes: int | None = None
     mtime_ns: int | None = None
+    ctime_ns: int | None = None
     semantic_facts: tuple[tuple[str, str], ...] = ()
     full_sha256: str = ""
     device_id: int | None = None
@@ -48,6 +49,7 @@ class SourceFingerprint:
                 locator=locator,
                 size_bytes=int(stat.st_size),
                 mtime_ns=int(stat.st_mtime_ns),
+                ctime_ns=int(getattr(stat, "st_ctime_ns", 0) or 0) or None,
                 device_id=int(getattr(stat, "st_dev", 0) or 0) or None,
                 inode=int(getattr(stat, "st_ino", 0) or 0) or None,
             )
@@ -70,6 +72,12 @@ class SourceFingerprint:
         if self.locator != other.locator:
             return False
         if self.size_bytes != other.size_bytes or self.mtime_ns != other.mtime_ns:
+            return False
+        if (
+            self.ctime_ns is not None
+            and other.ctime_ns is not None
+            and self.ctime_ns != other.ctime_ns
+        ):
             return False
         if (
             self.device_id is not None
@@ -100,6 +108,7 @@ class SourceFingerprint:
             "locator": self.locator,
             "size": self.size_bytes,
             "mtime_ns": self.mtime_ns,
+            "ctime_ns": self.ctime_ns,
             "semantic": self.semantic_facts,
             "sha256": self.full_sha256,
             "device_id": self.device_id,
