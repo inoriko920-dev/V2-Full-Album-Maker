@@ -280,3 +280,50 @@ def test_pending_import_does_not_mutate_project_after_window_close(tmp_path, mon
     assert project.videos == []
     assert window._import_job_count == 0
     assert window.log.toPlainText() == log_after_close
+
+
+def test_pending_import_continues_when_window_close_is_cancelled(tmp_path, monkeypatch):
+    app = _app()
+    source = tmp_path / "cancel-close-video.mp4"
+    source.write_bytes(b"video")
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_probe(path, kind=None):
+        assert kind == "video"
+        entered.set()
+        assert release.wait(timeout=5)
+        return 7.0
+
+    monkeypatch.setattr("full_album_maker.async_import.probe_duration", slow_probe)
+    monkeypatch.setattr(
+        "full_album_maker.async_import.QFileDialog.getOpenFileNames",
+        lambda *args, **kwargs: ([str(source)], "Video"),
+    )
+    monkeypatch.setattr(
+        "full_album_maker.project_dirty.QMessageBox.question",
+        lambda *args, **kwargs: __import__(
+            "PySide6.QtWidgets", fromlist=["QMessageBox"]
+        ).QMessageBox.Cancel,
+    )
+
+    window = MainWindow()
+    window.add_video()
+    assert entered.wait(timeout=2)
+
+    window.project.settings.fps = 60
+    window.refresh()
+    assert window.is_project_dirty() is True
+
+    window.close()
+    app.processEvents()
+
+    assert window._import_closed is False
+    assert window.isVisible() is True or window._import_job_count == 1
+
+    release.set()
+    _wait_jobs(window)
+
+    assert len(window.project.videos) == 1
+    assert Path(window.project.videos[0].path).name == "cancel-close-video.mp4"
+    _close_without_dirty_prompt(window)
