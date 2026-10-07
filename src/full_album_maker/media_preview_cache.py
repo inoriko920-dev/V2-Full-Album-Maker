@@ -17,6 +17,7 @@ from PySide6.QtGui import QImageReader
 from .cache_manager import CacheManager, DEFAULT_CACHE_MANAGER, current_cache_manager
 from .media_library_model import MediaAsset, MediaStatus, MediaType
 from .media_library_services import canonical_path_key
+from .media_probe_service import SourceFingerprint
 from .paths import ffmpeg_path
 
 
@@ -31,20 +32,15 @@ class PreviewResult:
     path: str = ""
     error: str = ""
     generation: int = 0
+    source_key: str = ""
+    source_fingerprint: str = ""
 
 
 def _source_fingerprint(asset: MediaAsset, cache_version: int = CACHE_VERSION) -> str:
-    source = Path(asset.path)
-    try:
-        stat = source.stat()
-        size = stat.st_size
-        mtime_ns = stat.st_mtime_ns
-    except OSError:
-        size = -1
-        mtime_ns = -1
+    source = SourceFingerprint.capture(asset.path)
     raw = (
         f"v{max(1, int(cache_version))}\0{asset.media_type.value}\0"
-        f"{canonical_path_key(asset.path)}\0{size}\0{mtime_ns}\0"
+        f"{source.cache_token(cache_version)}\0"
         f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}"
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -79,6 +75,10 @@ def _write_metadata(
         "asset_id": asset.asset_id,
         "source_key": canonical_path_key(asset.path),
         "media_type": asset.media_type.value,
+        "source_fingerprint": _source_fingerprint(
+            asset,
+            cache_manager.version("media-preview"),
+        ),
         "preview": cache_path.name,
     }
     _metadata_path(cache_path).write_text(
@@ -111,6 +111,10 @@ def _usable_cached_preview(
         "asset_id": asset.asset_id,
         "source_key": canonical_path_key(asset.path),
         "media_type": asset.media_type.value,
+        "source_fingerprint": _source_fingerprint(
+            asset,
+            cache_manager.version("media-preview"),
+        ),
         "preview": target.name,
     }
     if any(payload.get(key) != value for key, value in expected.items()):
@@ -188,6 +192,7 @@ def generate_preview(
     asset: MediaAsset,
     *,
     cache_manager: CacheManager | None = None,
+    publish_guard: Callable[[], bool] | None = None,
 ) -> str:
     """Build or reuse one disposable cached preview.
 
@@ -204,6 +209,9 @@ def generate_preview(
     version = manager.version("media-preview")
     baseline_fingerprint = _source_fingerprint(asset, version)
     target = _cache_root(manager) / f"{baseline_fingerprint}.png"
+
+    def publication_allowed() -> bool:
+        return True if publish_guard is None else bool(publish_guard())
     if _usable_cached_preview(target, asset, manager):
         return str(target)
 
@@ -227,12 +235,19 @@ def generate_preview(
             raise RuntimeError(
                 "Source media berubah saat preview dibuat; cache dibatalkan."
             )
+        if not publication_allowed():
+            raise RuntimeError(
+                "Preview generation sudah stale; cache tidak dipublikasikan."
+            )
         _atomic_replace_png(temp_path, target)
         _write_metadata(target, asset, manager)
-        if _source_fingerprint(asset, version) != baseline_fingerprint:
+        if (
+            _source_fingerprint(asset, version) != baseline_fingerprint
+            or not publication_allowed()
+        ):
             manager.evict("media-preview", target, _metadata_path(target))
             raise RuntimeError(
-                "Source media berubah sebelum preview cache dipublikasikan."
+                "Source/generation preview berubah sebelum cache dipublikasikan."
             )
         return str(target)
     finally:
@@ -278,9 +293,9 @@ class MediaPreviewCache(QObject):
         self.cache_manager = (
             cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
         )
-        self._queue: queue.Queue[tuple[int, MediaAsset] | None] = queue.Queue()
+        self._queue: queue.Queue[tuple[int, MediaAsset, str] | None] = queue.Queue()
         self._lock = threading.Lock()
-        self._pending: set[tuple[int, str]] = set()
+        self._pending: set[tuple[int, str, str]] = set()
         self._generation = 0
         self._jobs = 0
         self._closed = False
@@ -357,12 +372,24 @@ class MediaPreviewCache(QObject):
         return all(not thread.is_alive() for thread in threads)
 
     def reset(self) -> None:
-        """Invalidate callbacks from older project state without blocking the UI."""
+        """Invalidate old work and discard queued previews from prior state."""
         with self._lock:
             if self._closed:
                 return
             self._generation += 1
             self._pending.clear()
+            drained = 0
+            while True:
+                try:
+                    queued = self._queue.get_nowait()
+                except queue.Empty:
+                    break
+                if queued is not None:
+                    drained += 1
+            if drained:
+                self._jobs = max(0, self._jobs - drained)
+            jobs = self._jobs
+        self.jobs_changed.emit(jobs)
 
     def request(self, asset: MediaAsset) -> bool:
         with self._lock:
@@ -370,28 +397,37 @@ class MediaPreviewCache(QObject):
                 return False
         if asset.status == MediaStatus.MISSING:
             return False
-        target = preview_cache_path(asset, cache_manager=self.cache_manager)
+        version = self.cache_manager.version("media-preview")
+        source_fingerprint = _source_fingerprint(asset, version)
+        source_key = canonical_path_key(asset.path)
+        target = _cache_root(self.cache_manager) / f"{source_fingerprint}.png"
         if _usable_cached_preview(target, asset, self.cache_manager):
             with self._lock:
                 if self._closed:
                     return False
                 generation = self._generation
             self.preview_ready.emit(
-                PreviewResult(asset_id=asset.asset_id, path=str(target), generation=generation)
+                PreviewResult(
+                    asset_id=asset.asset_id,
+                    path=str(target),
+                    generation=generation,
+                    source_key=source_key,
+                    source_fingerprint=source_fingerprint,
+                )
             )
             return True
         with self._lock:
             if self._closed:
                 return False
             generation = self._generation
-            key = (generation, asset.asset_id)
+            key = (generation, asset.asset_id, source_fingerprint)
             if key in self._pending:
                 return False
             self._pending.add(key)
             self._jobs += 1
             jobs = self._jobs
         self.jobs_changed.emit(jobs)
-        self._queue.put((generation, asset))
+        self._queue.put((generation, asset, source_fingerprint))
         return True
 
     def _worker(self) -> None:
@@ -399,15 +435,29 @@ class MediaPreviewCache(QObject):
             job = self._queue.get()
             if job is None:
                 return
-            generation, asset = job
+            generation, asset, source_fingerprint = job
+
+            def publish_guard() -> bool:
+                with self._lock:
+                    return (
+                        not self._closed
+                        and generation == self._generation
+                    )
+
             try:
-                path = generate_preview(asset, cache_manager=self.cache_manager)
+                path = generate_preview(
+                    asset,
+                    cache_manager=self.cache_manager,
+                    publish_guard=publish_guard,
+                )
                 error = ""
             except Exception as exc:
                 path = ""
                 error = str(exc)
             with self._lock:
-                self._pending.discard((generation, asset.asset_id))
+                self._pending.discard(
+                    (generation, asset.asset_id, source_fingerprint)
+                )
                 self._jobs = max(0, self._jobs - 1)
                 jobs = self._jobs
                 current = self._generation
@@ -422,5 +472,7 @@ class MediaPreviewCache(QObject):
                         path=path,
                         error=error,
                         generation=generation,
+                        source_key=canonical_path_key(asset.path),
+                        source_fingerprint=source_fingerprint,
                     )
                 )
