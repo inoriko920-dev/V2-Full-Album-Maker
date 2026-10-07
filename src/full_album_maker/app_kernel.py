@@ -17,6 +17,7 @@ from .feature_parity_registry import (
     FeatureParityRegistry,
 )
 from .task_lifecycle import ShutdownReport, TaskSupervisor
+from .project_persistence import DEFAULT_PROJECT_PERSISTENCE, ProjectPersistence
 
 
 Runner = Callable[[], int]
@@ -59,6 +60,7 @@ class AppKernel:
     runtime: LegacyRuntimeAdapter
     feature_parity: FeatureParityRegistry
     tasks: TaskSupervisor
+    persistence: ProjectPersistence
     shutdown_timeout_seconds: float = 1.0
 
     def close(self) -> ShutdownReport:
@@ -93,6 +95,7 @@ class CompositionRoot:
         portable_smoke_runner: Runner | None = None,
         feature_parity: FeatureParityRegistry = DEFAULT_FEATURE_PARITY_REGISTRY,
         task_supervisor: TaskSupervisor | None = None,
+        project_persistence: ProjectPersistence = DEFAULT_PROJECT_PERSISTENCE,
         task_workers: int = 4,
         shutdown_timeout_seconds: float = 1.0,
     ) -> None:
@@ -106,6 +109,7 @@ class CompositionRoot:
             raise ValueError("shutdown_timeout_seconds harus >= 0.")
         self._feature_parity = feature_parity
         self._task_supervisor = task_supervisor
+        self._project_persistence = project_persistence
         self._task_workers = int(task_workers)
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
 
@@ -121,6 +125,7 @@ class CompositionRoot:
             runtime=runtime,
             feature_parity=self._feature_parity,
             tasks=tasks,
+            persistence=self._project_persistence,
             shutdown_timeout_seconds=self._shutdown_timeout_seconds,
         )
 
@@ -131,6 +136,7 @@ def build_app_kernel(
     portable_smoke_runner: Runner | None = None,
     feature_parity: FeatureParityRegistry = DEFAULT_FEATURE_PARITY_REGISTRY,
     task_supervisor: TaskSupervisor | None = None,
+    project_persistence: ProjectPersistence = DEFAULT_PROJECT_PERSISTENCE,
     task_workers: int = 4,
     shutdown_timeout_seconds: float = 1.0,
 ) -> AppKernel:
@@ -141,6 +147,7 @@ def build_app_kernel(
         portable_smoke_runner=portable_smoke_runner,
         feature_parity=feature_parity,
         task_supervisor=task_supervisor,
+        project_persistence=project_persistence,
         task_workers=task_workers,
         shutdown_timeout_seconds=shutdown_timeout_seconds,
     ).build()
@@ -150,6 +157,7 @@ __all__ = [
     "AppKernel",
     "CompositionRoot",
     "LegacyRuntimeAdapter",
+    "ProjectPersistence",
     "Runner",
     "ShutdownReport",
     "TaskSupervisor",
