@@ -160,6 +160,10 @@ def _write_sidecar_records(
         raise
 
 
+class SidecarMigrationConflict(ValueError):
+    """Raised when relink metadata cannot be moved without losing destination data."""
+
+
 @dataclass(frozen=True)
 class SidecarRecord:
     favorite: bool = False
@@ -229,14 +233,30 @@ class MediaSidecarStore:
             self.load()
         return dict(self._records)
 
+    @staticmethod
+    def _apply_one_migration(
+        latest: dict[str, SidecarRecord],
+        old_id: str,
+        new_id: str,
+    ) -> None:
+        old = latest.get(old_id)
+        if old is None:
+            return
+        destination = latest.get(new_id)
+        if destination is not None and destination != old:
+            raise SidecarMigrationConflict(
+                "Metadata tujuan relink sudah ada dan berbeda; migrasi dibatalkan "
+                "agar tag/favorit/deskripsi tidak hilang."
+            )
+        latest.pop(old_id, None)
+        latest[new_id] = old if destination is None else destination
+
     def _apply_local_pending(
         self,
         latest: dict[str, SidecarRecord],
     ) -> dict[str, SidecarRecord]:
         for old_id, new_id in self._pending_migrations:
-            old = latest.pop(old_id, None)
-            if old is not None and new_id not in latest:
-                latest[new_id] = old
+            self._apply_one_migration(latest, old_id, new_id)
         for dirty_id in tuple(self._dirty_records):
             local = self._records.get(dirty_id)
             if local is not None:
@@ -329,9 +349,7 @@ class MediaSidecarStore:
                 latest = self._apply_local_pending(
                     _read_sidecar_records(target, self.VERSION)
                 )
-                old = latest.pop(old_id, None)
-                if old is not None and new_id not in latest:
-                    latest[new_id] = old
+                self._apply_one_migration(latest, old_id, new_id)
                 _write_sidecar_records(target, self.VERSION, latest)
             self._records = latest
             self._loaded = True
@@ -340,9 +358,16 @@ class MediaSidecarStore:
 
         if not self._loaded:
             self.load()
-        old = self._records.pop(old_id, None)
-        if old is not None and new_id not in self._records:
-            self._records[new_id] = old
+        old = self._records.get(old_id)
+        destination = self._records.get(new_id)
+        if old is not None and destination is not None and destination != old:
+            raise SidecarMigrationConflict(
+                "Metadata tujuan relink sudah ada dan berbeda; migrasi dibatalkan "
+                "agar metadata lama tidak tertimpa."
+            )
+        self._records.pop(old_id, None)
+        if old is not None:
+            self._records[new_id] = old if destination is None else destination
             self._dirty_records.add(new_id)
         self._dirty_records.discard(old_id)
         self._pending_migrations.append((old_id, new_id))
