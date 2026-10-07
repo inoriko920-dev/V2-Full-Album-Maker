@@ -21,6 +21,88 @@ class PreflightLevel(str, Enum):
 
 
 @dataclass(frozen=True)
+class RequiredMediaIdentity:
+    path: str
+    size: int
+    mtime_ns: int
+    dev: int
+    ino: int
+
+
+def capture_required_media_identities(
+    document: ProjectDocument,
+) -> tuple[RequiredMediaIdentity, ...]:
+    """Capture the exact filesystem identity used by one render attempt.
+
+    This runtime identity is independent from optional persisted fingerprints.
+    It is used to detect source replacement/removal while FFmpeg is running.
+    """
+
+    values: list[RequiredMediaIdentity] = []
+    seen: set[str] = set()
+    for raw in required_media_paths(document):
+        path = raw.expanduser()
+        try:
+            resolved = path.resolve(strict=False)
+        except OSError:
+            resolved = path.absolute()
+        key = os.path.normcase(str(resolved))
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            stat = resolved.stat()
+        except OSError as exc:
+            raise FileNotFoundError(
+                f"Source media tidak tersedia: {resolved.name or resolved}"
+            ) from exc
+        if not resolved.is_file() or int(stat.st_size) <= 0:
+            raise FileNotFoundError(
+                f"Source media tidak valid: {resolved.name or resolved}"
+            )
+        values.append(
+            RequiredMediaIdentity(
+                path=str(resolved),
+                size=int(stat.st_size),
+                mtime_ns=int(stat.st_mtime_ns),
+                dev=int(getattr(stat, "st_dev", 0) or 0),
+                ino=int(getattr(stat, "st_ino", 0) or 0),
+            )
+        )
+    return tuple(values)
+
+
+def runtime_media_identity_issues(
+    baseline: tuple[RequiredMediaIdentity, ...],
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    for item in baseline:
+        path = Path(item.path)
+        try:
+            stat = path.stat()
+        except OSError:
+            issues.append(f"missing:{path.name or item.path}")
+            continue
+        if not path.is_file():
+            issues.append(f"not-file:{path.name or item.path}")
+            continue
+        if int(stat.st_size) != item.size:
+            issues.append(f"changed-size:{path.name}")
+            continue
+        if int(stat.st_mtime_ns) != item.mtime_ns:
+            issues.append(f"changed-mtime:{path.name}")
+            continue
+        current_dev = int(getattr(stat, "st_dev", 0) or 0)
+        current_ino = int(getattr(stat, "st_ino", 0) or 0)
+        if item.dev and current_dev and current_dev != item.dev:
+            issues.append(f"changed-device:{path.name}")
+            continue
+        if item.ino and current_ino and current_ino != item.ino:
+            issues.append(f"replaced-file:{path.name}")
+    return tuple(issues)
+
+
+@dataclass(frozen=True)
 class PreflightCheck:
     key: str
     label: str
