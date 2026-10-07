@@ -50,7 +50,7 @@ def _backup_file(source: Path, backup: Path) -> None:
     temp_backup = Path(temp_name)
     try:
         shutil.copy2(source, temp_backup)
-        with temp_backup.open("rb") as handle:
+        with temp_backup.open("rb+") as handle:
             os.fsync(handle.fileno())
         _replace_file(temp_backup, backup)
     finally:
