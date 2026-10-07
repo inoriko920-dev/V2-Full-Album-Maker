@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import errno
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -11,7 +14,9 @@ from full_album_maker.atomic_bundle import (
     JOURNAL_PREFIX,
     JOURNAL_SUFFIX,
     _bundle_render,
+    _publish_lock,
     _write_journal,
+    acquire_output_target_lease,
     publish_bundle_transactional,
     recover_interrupted_bundles,
 )
@@ -313,3 +318,92 @@ def test_recovery_removes_crash_orphaned_fallback_backup_copy(
     assert not backup.exists()
     assert not orphan_copy.exists()
     assert not journal.exists()
+
+
+
+def test_output_target_lease_blocks_a_second_process(tmp_path: Path) -> None:
+    target = tmp_path / "shared-final.mp4"
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(repo_root / "src") + (
+        os.pathsep + existing if existing else ""
+    )
+    code = r"""
+import sys
+import time
+from pathlib import Path
+from full_album_maker.atomic_bundle import acquire_output_target_lease
+
+target = Path(sys.argv[1])
+with acquire_output_target_lease(target):
+    print("LOCKED", flush=True)
+    time.sleep(30)
+"""
+    process = subprocess.Popen(
+        [sys.executable, "-c", code, str(target)],
+        cwd=repo_root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout is not None
+        assert process.stdout.readline().strip() == "LOCKED"
+        with pytest.raises(RenderError, match="sedang dipakai render lain"):
+            with acquire_output_target_lease(target):
+                pass
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+
+    # OS-owned lock must be automatically released when the other process dies.
+    with acquire_output_target_lease(target):
+        pass
+
+
+def test_live_publish_lock_prevents_false_crash_recovery(tmp_path: Path) -> None:
+    target = tmp_path / "album.mp4"
+    backup = tmp_path / ".album.mp4.fam-backup-live"
+    target.write_bytes(b"new-live-publish")
+    backup.write_bytes(b"old-before-live-publish")
+    journal = tmp_path / f"{JOURNAL_PREFIX}live{JOURNAL_SUFFIX}"
+    entries = [
+        {
+            "stage": str(tmp_path / "stage-live.mp4"),
+            "target": str(target),
+            "backup": str(backup),
+            "had_original": True,
+        }
+    ]
+    _write_journal(journal, "publishing", entries)
+
+    with _publish_lock(tmp_path):
+        with pytest.raises(RenderError, match="transaksi publish dari instance lain"):
+            recover_interrupted_bundles(tmp_path)
+        assert target.read_bytes() == b"new-live-publish"
+        assert backup.read_bytes() == b"old-before-live-publish"
+        assert journal.exists()
+
+    # Once the owner is gone, ordinary crash recovery may safely roll it back.
+    recover_interrupted_bundles(tmp_path)
+    assert target.read_bytes() == b"old-before-live-publish"
+    assert not backup.exists()
+    assert not journal.exists()
+
+
+def test_publish_is_rejected_while_another_publish_lock_is_live(tmp_path: Path) -> None:
+    stage = tmp_path / "stage.mp4"
+    target = tmp_path / "album.mp4"
+    stage.write_bytes(b"new")
+    target.write_bytes(b"old")
+
+    with _publish_lock(tmp_path):
+        with pytest.raises(RenderError, match="transaksi publish dari instance lain"):
+            publish_bundle_transactional([(stage, target)])
+        assert stage.read_bytes() == b"new"
+        assert target.read_bytes() == b"old"
+
+    publish_bundle_transactional([(stage, target)])
+    assert target.read_bytes() == b"new"

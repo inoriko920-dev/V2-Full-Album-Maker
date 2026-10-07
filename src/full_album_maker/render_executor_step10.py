@@ -12,7 +12,7 @@ import threading
 import time
 from typing import Callable
 
-from .atomic_bundle import publish_bundle_transactional
+from .atomic_bundle import acquire_output_target_lease, publish_bundle_transactional
 from .render_center_model_step10 import (
     RenderJob,
     RenderJobState,
@@ -525,6 +525,7 @@ class RenderExecutor:
     ) -> ExecutionResult:
         self._claim(job.attempt_id)
         staged: Path | None = None
+        target_lease = None
         try:
             if job.state not in {
                 RenderJobState.DRAFT,
@@ -561,6 +562,12 @@ class RenderExecutor:
             job.transition(RenderJobState.STARTING)
 
             final = job.settings.final_output
+            # Reserve the final path for the entire render, not just the tiny
+            # publish phase. This prevents another app instance from rendering
+            # the same destination and later overwriting a valid result.
+            lease_candidate = acquire_output_target_lease(final)
+            lease_candidate.__enter__()
+            target_lease = lease_candidate
             final.parent.mkdir(parents=True, exist_ok=True)
             fd, stage_name = tempfile.mkstemp(
                 prefix=f".{final.stem}.{job.attempt_id[:8]}.",
@@ -677,6 +684,8 @@ class RenderExecutor:
                     staged.unlink(missing_ok=True)
                 except OSError:
                     pass
+            if target_lease is not None:
+                target_lease.__exit__(None, None, None)
             self._release(job.attempt_id)
 
     @staticmethod

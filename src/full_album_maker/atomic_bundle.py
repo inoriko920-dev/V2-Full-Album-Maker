@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+import hashlib
 import json
 import os
 import shutil
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 from . import visual_feature as visual_feature_module
 from .atomic_io import atomic_write_text
@@ -20,6 +22,100 @@ _originals: dict[str, Any] = {}
 
 JOURNAL_PREFIX = ".fam-bundle-"
 JOURNAL_SUFFIX = ".json"
+LOCK_DIRECTORY = ".fam-locks"
+PUBLISH_LOCK_NAME = "publish.lock"
+
+
+def _acquire_os_lock(handle) -> bool:
+    """Acquire a non-blocking exclusive lock that the OS releases on process exit."""
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+
+    import fcntl
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _release_os_lock(handle) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+
+
+@contextmanager
+def _exclusive_lock(path: Path, *, busy_message: str) -> Iterator[None]:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    handle = os.fdopen(fd, "r+b", buffering=0)
+    try:
+        if os.fstat(handle.fileno()).st_size == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if not _acquire_os_lock(handle):
+            raise RenderError(busy_message)
+        try:
+            yield
+        finally:
+            _release_os_lock(handle)
+    finally:
+        handle.close()
+
+
+def _target_lock_path(target: Path) -> Path:
+    resolved = str(Path(target).resolve(strict=False)).casefold()
+    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:24]
+    return Path(target).parent / LOCK_DIRECTORY / f"target-{digest}.lock"
+
+
+@contextmanager
+def acquire_output_target_lease(target: Path) -> Iterator[None]:
+    """Reserve one final output path across app instances for the whole render."""
+
+    target = Path(target).resolve(strict=False)
+    with _exclusive_lock(
+        _target_lock_path(target),
+        busy_message=(
+            f"Output {target.name} sedang dipakai render lain. "
+            "Gunakan nama output berbeda atau tunggu render tersebut selesai."
+        ),
+    ):
+        yield
+
+
+@contextmanager
+def _publish_lock(directory: Path) -> Iterator[None]:
+    directory = Path(directory).resolve(strict=False)
+    with _exclusive_lock(
+        directory / LOCK_DIRECTORY / PUBLISH_LOCK_NAME,
+        busy_message=(
+            "Folder output sedang menjalankan transaksi publish dari instance lain. "
+            "Recovery/publish ditolak agar journal aktif tidak dianggap crash."
+        ),
+    ):
+        yield
 
 
 def _replace_file(source: Path, target: Path) -> None:
@@ -143,18 +239,7 @@ def _cleanup_transaction_files(entries: list[dict[str, Any]], journal: Path) -> 
     _cleanup_path(journal)
 
 
-def recover_interrupted_bundles(directory: Path) -> None:
-    """Recover a previous crash during the tiny multi-file publish phase.
-
-    A committed journal means every target was already replaced and only hidden
-    backups/journal cleanup was interrupted. Any other state rolls back to the
-    previous bundle, preferring consistency over keeping a possibly partial new
-    render.
-    """
-
-    directory = Path(directory)
-    if not directory.exists():
-        return
+def _recover_interrupted_bundles_unlocked(directory: Path) -> None:
     for journal in sorted(directory.glob(f"{JOURNAL_PREFIX}*{JOURNAL_SUFFIX}")):
         payload = _read_journal(journal)
         entries = payload["entries"]
@@ -170,6 +255,20 @@ def recover_interrupted_bundles(directory: Path) -> None:
                 + "\n• ".join(failures)
             )
         _cleanup_transaction_files(entries, journal)
+
+
+def recover_interrupted_bundles(directory: Path) -> None:
+    """Recover crash debris without touching a transaction owned by another process.
+
+    The directory publish lock is held only during journal recovery/publication and
+    is released automatically by the OS if the owning process crashes.
+    """
+
+    directory = Path(directory)
+    if not directory.exists():
+        return
+    with _publish_lock(directory):
+        _recover_interrupted_bundles_unlocked(directory)
 
 
 def publish_bundle_transactional(
@@ -194,8 +293,6 @@ def publish_bundle_transactional(
     directory = next(iter(directories))
     directory.mkdir(parents=True, exist_ok=True)
 
-    recover_interrupted_bundles(directory)
-
     seen_targets: set[str] = set()
     for stage, target in normalized:
         if not stage.exists():
@@ -205,53 +302,57 @@ def publish_bundle_transactional(
             raise RenderError(f"Target bundle duplikat: {target.name}")
         seen_targets.add(key)
 
-    bundle_id = uuid.uuid4().hex
-    journal = directory / f"{JOURNAL_PREFIX}{bundle_id}{JOURNAL_SUFFIX}"
-    entries: list[dict[str, Any]] = []
-    for stage, target in normalized:
-        had_original = target.exists()
-        backup = (
-            directory / f".{target.name}.fam-backup-{bundle_id}"
-            if had_original
-            else None
-        )
-        entries.append(
-            {
-                "stage": str(stage.resolve()),
-                "target": str(target.resolve()),
-                "backup": str(backup.resolve()) if backup is not None else "",
-                "had_original": had_original,
-            }
-        )
+    with _publish_lock(directory):
+        # Only the process holding this lock may interpret journals as abandoned.
+        _recover_interrupted_bundles_unlocked(directory)
 
-    _write_journal(journal, "preparing", entries)
-    try:
-        for entry in entries:
-            if not entry["had_original"]:
-                continue
-            source = Path(entry["target"])
-            backup = Path(entry["backup"])
-            _backup_file(source, backup)
+        bundle_id = uuid.uuid4().hex
+        journal = directory / f"{JOURNAL_PREFIX}{bundle_id}{JOURNAL_SUFFIX}"
+        entries: list[dict[str, Any]] = []
+        for stage, target in normalized:
+            had_original = target.exists()
+            backup = (
+                directory / f".{target.name}.fam-backup-{bundle_id}"
+                if had_original
+                else None
+            )
+            entries.append(
+                {
+                    "stage": str(stage.resolve()),
+                    "target": str(target.resolve()),
+                    "backup": str(backup.resolve()) if backup is not None else "",
+                    "had_original": had_original,
+                }
+            )
 
-        _write_journal(journal, "publishing", entries)
-        for entry in entries:
-            _replace_file(Path(entry["stage"]), Path(entry["target"]))
+        _write_journal(journal, "preparing", entries)
+        try:
+            for entry in entries:
+                if not entry["had_original"]:
+                    continue
+                source = Path(entry["target"])
+                backup = Path(entry["backup"])
+                _backup_file(source, backup)
 
-        # Mark committed before deleting backups. If the process dies after this
-        # point, recovery keeps the complete new bundle and only removes debris.
-        _write_journal(journal, "committed", entries)
-    except Exception as exc:
-        failures = _rollback_entries(entries)
-        if not failures:
+            _write_journal(journal, "publishing", entries)
+            for entry in entries:
+                _replace_file(Path(entry["stage"]), Path(entry["target"]))
+
+            # Mark committed before deleting backups. If the process dies after this
+            # point, recovery keeps the complete new bundle and only removes debris.
+            _write_journal(journal, "committed", entries)
+        except Exception as exc:
+            failures = _rollback_entries(entries)
+            if not failures:
+                _cleanup_transaction_files(entries, journal)
+                raise RenderError(f"Publikasi bundle render gagal; output lama dipulihkan: {exc}") from exc
+            raise RenderError(
+                "Publikasi bundle render gagal dan rollback tidak lengkap. "
+                "Backup/journal sengaja dipertahankan untuk recovery:\n• "
+                + "\n• ".join(failures)
+            ) from exc
+        else:
             _cleanup_transaction_files(entries, journal)
-            raise RenderError(f"Publikasi bundle render gagal; output lama dipulihkan: {exc}") from exc
-        raise RenderError(
-            "Publikasi bundle render gagal dan rollback tidak lengkap. "
-            "Backup/journal sengaja dipertahankan untuk recovery:\n• "
-            + "\n• ".join(failures)
-        ) from exc
-    else:
-        _cleanup_transaction_files(entries, journal)
 
 
 def _stage_path(target: Path, role: str) -> Path:
@@ -320,17 +421,20 @@ def _bundle_render(
                 "Lokasi output/sidecar tidak boleh menimpa file sumber proyek."
             )
 
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    recover_interrupted_bundles(dest_path.parent)
-    stages = [
-        _stage_path(dest_path, "video-rendering"),
-        _stage_path(sidecars[0], "chapters-rendering"),
-        _stage_path(sidecars[1], "tracklist-rendering"),
-        _stage_path(sidecars[2], "timeline-rendering"),
-    ]
-
-    root = temp_dir()
+    lease = acquire_output_target_lease(dest_path)
+    lease.__enter__()
+    stages: list[Path] = []
     try:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        recover_interrupted_bundles(dest_path.parent)
+        stages = [
+            _stage_path(dest_path, "video-rendering"),
+            _stage_path(sidecars[0], "chapters-rendering"),
+            _stage_path(sidecars[1], "tracklist-rendering"),
+            _stage_path(sidecars[2], "timeline-rendering"),
+        ]
+
+        root = temp_dir()
         with tempfile.TemporaryDirectory(prefix="fam_render_", dir=root) as work_dir:
             work = Path(work_dir)
             album_audio = work / "timeline_audio.m4a"
@@ -346,16 +450,17 @@ def _bundle_render(
         _check_cancel(self)
 
         publish_bundle_transactional(zip(stages, targets))
+
+        if log:
+            log(
+                "Render selesai dan MP4 + chapter + tracklist + timeline "
+                "dipublikasikan sebagai satu bundle transaksional."
+            )
+        return str(dest_path)
     finally:
         for stage in stages:
             _cleanup_path(stage)
-
-    if log:
-        log(
-            "Render selesai dan MP4 + chapter + tracklist + timeline "
-            "dipublikasikan sebagai satu bundle transaksional."
-        )
-    return str(dest_path)
+        lease.__exit__(None, None, None)
 
 
 def install_atomic_bundle() -> None:

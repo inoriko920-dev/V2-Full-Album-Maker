@@ -19,6 +19,7 @@ from full_album_maker.render_center_model_step10 import (
     build_render_snapshot,
     settings_from_preset,
 )
+from full_album_maker.atomic_bundle import acquire_output_target_lease
 from full_album_maker.render_executor_step10 import (
     OutputVerification,
     RenderExecutor,
@@ -427,5 +428,24 @@ def test_stage_allocation_enospc_fails_without_touching_existing_final(
     assert job.error_code == "RENDER_FAILED"
     assert "No space left on device" in job.error_message
     assert final.read_bytes() == b"old-final-stays"
+    assert executor._active_attempt is None
+    assert not list(tmp_path.glob(".*.rendering.mp4"))
+
+
+
+def test_executor_rejects_busy_output_before_ffmpeg_spawn(tmp_path: Path) -> None:
+    job = _job(tmp_path)
+    runner = FakeRunner()
+    executor = RenderExecutor(_capability(), runner=runner, verifier=_verified)
+    final = job.settings.final_output
+
+    with acquire_output_target_lease(final):
+        with pytest.raises(Exception, match="sedang dipakai render lain"):
+            executor.execute(job)
+
+    assert runner.args is None
+    assert job.state == RenderJobState.FAILED
+    assert job.error_code == "RENDER_FAILED"
+    assert "sedang dipakai render lain" in job.error_message
     assert executor._active_attempt is None
     assert not list(tmp_path.glob(".*.rendering.mp4"))
