@@ -32,6 +32,7 @@ from full_album_maker.render_queue_presentation_step10 import install_step10_que
 from full_album_maker.render_feature_step10 import install_step10_render
 from full_album_maker.integration_feature_step11 import install_step11_integration
 from full_album_maker.integration_completion_step11 import install_step11_integration_completion
+from full_album_maker.app_kernel import build_app_kernel
 
 
 install_feature()
@@ -66,18 +67,27 @@ install_step11_integration()
 install_step11_integration_completion()
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
-    if "--portable-smoke" in args:
-        from full_album_maker.release_smoke import run_portable_smoke
-
-        return run_portable_smoke()
-
+def _run_legacy_gui() -> int:
     # Import after installing the compatibility/presentation layers so the recovered
     # v1.4 window keeps its proven engine while the integrated workspaces extend it.
     from full_album_maker.v14_window import run
 
     return run()
+
+
+def _run_legacy_portable_smoke() -> int:
+    from full_album_maker.release_smoke import run_portable_smoke
+
+    return run_portable_smoke()
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    kernel = build_app_kernel(
+        gui_runner=_run_legacy_gui,
+        portable_smoke_runner=_run_legacy_portable_smoke,
+    )
+    return kernel.run(args)
 
 
 if __name__ == "__main__":
