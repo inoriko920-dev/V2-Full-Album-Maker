@@ -21,6 +21,7 @@ from .project_persistence import DEFAULT_PROJECT_PERSISTENCE, ProjectPersistence
 from .cache_manager import CacheManager, bind_cache_manager
 from .media_probe_service import MediaProbeService, bind_media_probe_service
 from .preview_engine import PreviewEngine, bind_preview_engine
+from .beat_analysis import BeatAnalysisService, bind_beat_analysis_service
 from .render_engine import RenderEngine, bind_render_engine
 
 
@@ -58,8 +59,9 @@ class AppKernel:
     """Application kernel with one central task-lifecycle owner.
 
     M2 wires TaskSupervisor ownership, M3 ProjectPersistence, M4 RenderEngine,
-    and M5 the probe/preview/cache service facades. Legacy implementations
-    remain adapters until their individual parity gates permit retirement.
+    M5 the probe/preview/cache service facades, and M6 BeatAnalysisService.
+    Legacy implementations remain adapters until their individual parity gates
+    permit retirement.
     """
 
     runtime: LegacyRuntimeAdapter
@@ -69,6 +71,7 @@ class AppKernel:
     media_probe_service: MediaProbeService
     cache_manager: CacheManager
     preview_engine: PreviewEngine
+    beat_analysis_service: BeatAnalysisService
     render_engine: RenderEngine
     shutdown_timeout_seconds: float = 1.0
 
@@ -80,7 +83,7 @@ class AppKernel:
         try:
             if "--portable-smoke" in args:
                 return self.runtime.run_portable_smoke()
-            # M4/M5 expose kernel-owned services only while the legacy runtime
+            # M4–M6 expose kernel-owned services only while the legacy runtime
             # is active. Legacy constructors capture these exact instances
             # before their worker threads start, avoiding a second owner.
             with (
@@ -88,6 +91,7 @@ class AppKernel:
                 bind_media_probe_service(self.media_probe_service),
                 bind_cache_manager(self.cache_manager),
                 bind_preview_engine(self.preview_engine),
+                bind_beat_analysis_service(self.beat_analysis_service),
             ):
                 return self.runtime.run_gui()
         finally:
@@ -101,9 +105,10 @@ class CompositionRoot:
     """Single M1 launch-time wiring location for V2.
 
     M1 bound the proven runtime entrypoints. M2 added TaskSupervisor, M3 added
-    ProjectPersistence, M4 added RenderEngine, and M5 adds MediaProbeService,
-    CacheManager, and PreviewEngine while preserving proven adapters.
-    WorkspaceRegistry and later migration boundaries remain deferred.
+    ProjectPersistence, M4 added RenderEngine, M5 added MediaProbeService,
+    CacheManager, and PreviewEngine, and M6 adds BeatAnalysisService while
+    preserving the proven Spectrum/render paths. WorkspaceRegistry and later
+    migration boundaries remain deferred.
     """
 
     def __init__(
@@ -117,6 +122,7 @@ class CompositionRoot:
         media_probe_service: MediaProbeService | None = None,
         cache_manager: CacheManager | None = None,
         preview_engine: PreviewEngine | None = None,
+        beat_analysis_service: BeatAnalysisService | None = None,
         render_engine: RenderEngine | None = None,
         task_workers: int = 4,
         shutdown_timeout_seconds: float = 1.0,
@@ -135,6 +141,7 @@ class CompositionRoot:
         self._media_probe_service = media_probe_service
         self._cache_manager = cache_manager
         self._preview_engine = preview_engine
+        self._beat_analysis_service = beat_analysis_service
         self._render_engine = render_engine
         self._task_workers = int(task_workers)
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
@@ -156,6 +163,14 @@ class CompositionRoot:
         preview_engine = self._preview_engine or PreviewEngine(cache_manager=cache_manager)
         if preview_engine.cache_manager is not cache_manager:
             raise ValueError("PreviewEngine harus memakai CacheManager milik AppKernel.")
+        beat_analysis_service = self._beat_analysis_service or BeatAnalysisService(
+            cache_manager=cache_manager,
+            task_supervisor=tasks,
+        )
+        if beat_analysis_service.cache_manager is not cache_manager:
+            raise ValueError("BeatAnalysisService harus memakai CacheManager milik AppKernel.")
+        if beat_analysis_service.task_supervisor is not tasks:
+            raise ValueError("BeatAnalysisService harus memakai TaskSupervisor milik AppKernel.")
         return AppKernel(
             runtime=runtime,
             feature_parity=self._feature_parity,
@@ -164,6 +179,7 @@ class CompositionRoot:
             media_probe_service=self._media_probe_service or MediaProbeService(),
             cache_manager=cache_manager,
             preview_engine=preview_engine,
+            beat_analysis_service=beat_analysis_service,
             render_engine=self._render_engine or RenderEngine(),
             shutdown_timeout_seconds=self._shutdown_timeout_seconds,
         )
@@ -179,6 +195,7 @@ def build_app_kernel(
     media_probe_service: MediaProbeService | None = None,
     cache_manager: CacheManager | None = None,
     preview_engine: PreviewEngine | None = None,
+    beat_analysis_service: BeatAnalysisService | None = None,
     render_engine: RenderEngine | None = None,
     task_workers: int = 4,
     shutdown_timeout_seconds: float = 1.0,
@@ -194,6 +211,7 @@ def build_app_kernel(
         media_probe_service=media_probe_service,
         cache_manager=cache_manager,
         preview_engine=preview_engine,
+        beat_analysis_service=beat_analysis_service,
         render_engine=render_engine,
         task_workers=task_workers,
         shutdown_timeout_seconds=shutdown_timeout_seconds,
@@ -202,6 +220,7 @@ def build_app_kernel(
 
 __all__ = [
     "AppKernel",
+    "BeatAnalysisService",
     "CacheManager",
     "CompositionRoot",
     "LegacyRuntimeAdapter",
