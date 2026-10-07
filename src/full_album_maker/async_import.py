@@ -96,7 +96,7 @@ def _probe_one(
 
 
 def _start_import(window, kind: str, paths: list[str]) -> None:
-    if not paths:
+    if not paths or getattr(window, "_import_closed", False):
         return
 
     current = _target_paths(window, kind)
@@ -120,6 +120,7 @@ def _start_import(window, kind: str, paths: list[str]) -> None:
         return
 
     project_ref = window.project
+    bridge = window._import_bridge
     probe_service = (
         getattr(window, "_m5_media_probe_service", None)
         or current_media_probe_service()
@@ -142,7 +143,7 @@ def _start_import(window, kind: str, paths: list[str]) -> None:
                 except Exception as exc:  # defensive boundary around codec/decoder tools
                     errors.append(f"Gagal membaca {Path(path).name}: {exc}")
         finally:
-            window._import_bridge.finished.emit(
+            bridge.finished.emit(
                 {
                     "kind": kind,
                     "paths": selected,
@@ -165,6 +166,9 @@ def _finish_import(self, payload: dict[str, Any]) -> None:
     for path in paths:
         self._import_pending_keys.discard(_path_key(path))
     self._import_job_count = max(0, int(self._import_job_count) - 1)
+
+    if getattr(self, "_import_closed", False):
+        return
 
     if self.project is not project_ref:
         self.log.appendPlainText(
@@ -223,12 +227,21 @@ def _patched_init(self, *args, **kwargs) -> None:
     )
     self._import_pending_keys: set[str] = set()
     self._import_job_count = 0
+    self._import_closed = False
     # Keep the bridge un-parented. If the window closes while a daemon import
     # worker is winding down, Qt can safely auto-disconnect the dead receiver
     # without the signal source itself having been deleted first.
     self._import_bridge = _ImportBridge()
     self._import_bridge.finished.connect(self._finish_media_import)
     _originals["ui_init"](self, *args, **kwargs)
+
+
+def _patched_close_event(self, event) -> None:
+    _originals["close_event"](self, event)
+    if event.isAccepted():
+        self._import_closed = True
+        self._import_pending_keys.clear()
+        self._import_job_count = 0
 
 
 def _add_video(self) -> None:
@@ -272,6 +285,7 @@ def install_async_import() -> None:
             "add_video": MainWindow.add_video,
             "add_audio": MainWindow.add_audio,
             "add_image": MainWindow.add_image,
+            "close_event": MainWindow.closeEvent,
         }
     )
 
@@ -279,6 +293,7 @@ def install_async_import() -> None:
     MainWindow.add_video = _add_video
     MainWindow.add_audio = _add_audio
     MainWindow.add_image = _add_image
+    MainWindow.closeEvent = _patched_close_event
     MainWindow._finish_media_import = _finish_import
     _installed = True
 
@@ -292,6 +307,7 @@ def uninstall_async_import() -> None:
     MainWindow.add_video = _originals["add_video"]
     MainWindow.add_audio = _originals["add_audio"]
     MainWindow.add_image = _originals["add_image"]
+    MainWindow.closeEvent = _originals["close_event"]
     if hasattr(MainWindow, "_finish_media_import"):
         delattr(MainWindow, "_finish_media_import")
     _originals.clear()

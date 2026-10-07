@@ -23,9 +23,9 @@ LEGACY_TASK_OWNERS: tuple[LegacyTaskOwner, ...] = (
         "async-import",
         "src/full_album_maker/async_import.py",
         "daemon threading.Thread per import batch",
-        "captures project_ref and ignores completion after project switch",
-        "no explicit worker join; daemon worker winds down independently",
-        "candidate for TaskScope after import behavior is characterized",
+        "captures project_ref and ignores completion after project switch or accepted window close",
+        "accepted window close suppresses delivery; daemon worker winds down independently without retaining the window",
+        "TaskScope migration remains optional after the v2.0.1 close-safety guard",
     ),
     LegacyTaskOwner(
         "editor-preview-render",
