@@ -13,6 +13,7 @@ from full_album_maker.project import MediaItem, Project
 from full_album_maker.project_migrations import migrate_project_v1
 from full_album_maker.project_persistence import (
     ProjectPersistence,
+    ProjectPersistenceConflict,
     RecoveryClassification,
 )
 
@@ -281,3 +282,90 @@ def test_editor_workspace_and_step11_save_route_through_m3_facade() -> None:
     assert "DEFAULT_PROJECT_PERSISTENCE.write_recovery" in integration_source
     assert "DEFAULT_PROJECT_PERSISTENCE.assess_recovery" in integration_source
     assert "save_verified_legacy_project(path" not in integration_source
+
+
+
+def test_stale_native_save_cannot_overwrite_newer_external_project(tmp_path: Path) -> None:
+    persistence = ProjectPersistence()
+    target = tmp_path / "shared.json"
+    base = _document("Shared", revision=1)
+    persistence.save_document(target, base)
+    baseline = persistence.document_hash_on_disk(target)
+
+    first = base.clone()
+    first.revision = 2
+    first.album_title = "Saved by instance A"
+    first.validate()
+
+    stale = base.clone()
+    stale.revision = 2
+    stale.album_title = "Stale instance B"
+    stale.validate()
+
+    persistence.save_document(
+        target,
+        first,
+        expected_disk_hash=baseline,
+    )
+
+    with pytest.raises(ProjectPersistenceConflict, match="berubah sejak dibuka"):
+        persistence.save_document(
+            target,
+            stale,
+            expected_disk_hash=baseline,
+        )
+
+    restored = persistence.load_document(target)
+    assert restored.album_title == "Saved by instance A"
+    assert normalized_project_hash(restored) == normalized_project_hash(first)
+
+
+def test_stale_compatibility_save_cannot_overwrite_other_instance(tmp_path: Path) -> None:
+    persistence = ProjectPersistence()
+    target = tmp_path / "shared-compat.json"
+    base = _document("Shared Compatibility", revision=3)
+    persistence.save_compatibility(
+        target,
+        _CompatibilityEnvelope(base),
+        base,
+    )
+    baseline = persistence.document_hash_on_disk(target)
+
+    first = base.clone()
+    first.revision = 4
+    first.album_title = "Instance A wins"
+    first.validate()
+    persistence.save_compatibility(
+        target,
+        _CompatibilityEnvelope(first),
+        first,
+        expected_disk_hash=baseline,
+    )
+
+    stale = base.clone()
+    stale.revision = 4
+    stale.album_title = "Instance B stale"
+    stale.validate()
+    with pytest.raises(ProjectPersistenceConflict, match="Save As"):
+        persistence.save_compatibility(
+            target,
+            _CompatibilityEnvelope(stale),
+            stale,
+            expected_disk_hash=baseline,
+        )
+
+    assert persistence.load_document(target).album_title == "Instance A wins"
+
+
+def test_expected_empty_hash_refuses_unexpected_existing_target(tmp_path: Path) -> None:
+    persistence = ProjectPersistence()
+    target = tmp_path / "appeared.json"
+    existing = _document("Existing", revision=2)
+    persistence.save_document(target, existing)
+
+    with pytest.raises(ProjectPersistenceConflict):
+        persistence.save_document(
+            target,
+            _document("New Attempt", revision=1),
+            expected_disk_hash="",
+        )
