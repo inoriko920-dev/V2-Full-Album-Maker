@@ -225,3 +225,71 @@ def test_queue_retention_can_exceed_limit_when_all_work_is_unfinished(
     assert {job.attempt_id for job in store.load()} == {
         job.attempt_id for job in jobs
     }
+
+
+
+def test_startup_recovery_quarantines_corrupt_queue_without_dropping_bytes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "queue_v1.json"
+    original = b'{"format":"full-album-maker-render-queue","version":1,"jobs":['
+    path.write_bytes(original)
+    store = RenderQueueStore(path)
+
+    queue = RenderQueue(store)
+
+    assert queue.jobs == []
+    assert queue.recovery_warning
+    assert "dikarantina" in queue.recovery_warning
+    assert queue.quarantined_path is not None
+    assert queue.quarantined_path.is_file()
+    assert queue.quarantined_path.read_bytes() == original
+    assert not path.exists()
+
+    fresh = _job(tmp_path, "fresh-after-quarantine")
+    _mark_ready(fresh)
+    queue.enqueue(fresh)
+    assert path.is_file()
+    assert store.load()[0].attempt_id == fresh.attempt_id
+    assert queue.quarantined_path.read_bytes() == original
+
+
+def test_malformed_job_entry_is_quarantined_instead_of_crashing_startup(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "queue_v1.json"
+    path.write_text(
+        '{"format":"full-album-maker-render-queue","version":1,'
+        '"jobs":[{"job_id":"missing-required-fields"}]}',
+        encoding="utf-8",
+    )
+
+    queue = RenderQueue(RenderQueueStore(path))
+
+    assert queue.jobs == []
+    assert queue.quarantined_path is not None
+    assert queue.quarantined_path.exists()
+    assert "dikarantina" in queue.recovery_warning
+
+
+def test_failed_quarantine_blocks_persistence_to_preserve_original(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "queue_v1.json"
+    original = b"{broken"
+    path.write_bytes(original)
+    store = RenderQueueStore(path)
+
+    monkeypatch.setattr(queue_module.os, "replace", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("rename denied")))
+    monkeypatch.setattr(queue_module.shutil, "copy2", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("copy denied")))
+
+    queue = RenderQueue(store)
+
+    assert queue.jobs == []
+    assert store.persistence_blocked is True
+    assert "dinonaktifkan" in queue.recovery_warning
+    assert path.read_bytes() == original
+    with pytest.raises(ValueError, match="dinonaktifkan"):
+        store.save([])
+    assert path.read_bytes() == original

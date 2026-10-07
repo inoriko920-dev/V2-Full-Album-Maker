@@ -84,6 +84,11 @@ def _install_widgets(self) -> None:
     if not self.render_inspector_s10.output_folder.text().strip():
         self.render_inspector_s10.set_output_folder(str(output_dir()))
 
+    queue_warning = getattr(self._s10_queue, "recovery_warning", "")
+    if queue_warning:
+        self.render_workspace_s10.clear_preflight(queue_warning)
+        self.render_inspector_s10.set_preflight_ready(False, queue_warning)
+
     self.render_performance_s10 = RenderPerformanceGraph()
     center_layout = self.render_workspace_s10.layout()
     center_layout.insertWidget(max(0, center_layout.count() - 1), self.render_performance_s10)

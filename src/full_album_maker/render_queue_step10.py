@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import shutil
 from typing import Iterable
+from uuid import uuid4
 
 from .atomic_io import atomic_write_text
 from .paths import data_dir
@@ -167,6 +171,9 @@ def job_from_dict(value: dict) -> RenderJob:
 class RenderQueueStore:
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path is not None else data_dir() / "render" / "queue_v1.json"
+        self.last_recovery_warning = ""
+        self.quarantined_path: Path | None = None
+        self.persistence_blocked = False
 
     def load(self) -> list[RenderJob]:
         if not self.path.exists():
@@ -180,9 +187,61 @@ class RenderQueueStore:
         values = raw.get("jobs", [])
         if not isinstance(values, list):
             raise ValueError("Daftar render job tidak valid.")
-        return [job_from_dict(item) for item in values]
+        jobs: list[RenderJob] = []
+        for index, item in enumerate(values):
+            try:
+                jobs.append(job_from_dict(item))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Render job persistence rusak pada item #{index + 1}: {exc}"
+                ) from exc
+        return jobs
+
+    def _quarantine_corrupt_store(self, reason: Exception) -> Path | None:
+        if not self.path.exists():
+            self.last_recovery_warning = (
+                "Riwayat render tidak dapat dibaca, tetapi file sumber sudah tidak ada. "
+                "Aplikasi dibuka dengan antrean baru."
+            )
+            return None
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        quarantine = self.path.with_name(
+            f"{self.path.stem}.corrupt-{timestamp}-{uuid4().hex[:8]}{self.path.suffix}"
+        )
+        quarantine.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.replace(self.path, quarantine)
+        except OSError:
+            try:
+                shutil.copy2(self.path, quarantine)
+            except OSError as backup_exc:
+                self.persistence_blocked = True
+                self.last_recovery_warning = (
+                    "Riwayat render rusak dan tidak dapat dikarantina. "
+                    "Aplikasi tetap dibuka, tetapi persistence Render Queue "
+                    f"dinonaktifkan agar file asli tidak tertimpa ({backup_exc})."
+                )
+                return None
+            try:
+                self.path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        self.quarantined_path = quarantine
+        self.last_recovery_warning = (
+            "Riwayat Render Queue rusak dan telah dikarantina sebagai "
+            f"{quarantine.name}. Aplikasi dibuka dengan antrean baru; "
+            "file karantina dipertahankan untuk pemeriksaan/recovery manual."
+        )
+        return quarantine
 
     def save(self, jobs: Iterable[RenderJob]) -> None:
+        if self.persistence_blocked:
+            raise ValueError(
+                "Persistence Render Queue dinonaktifkan karena store rusak "
+                "belum berhasil dikarantina."
+            )
         values = _bounded_history(jobs)
         payload = {
             "format": QUEUE_FORMAT,
@@ -195,8 +254,10 @@ class RenderQueueStore:
             encoding="utf-8",
         )
 
-    def recover(self) -> tuple[list[RenderJob], tuple[str, ...]]:
-        jobs = self.load()
+    def _recover_jobs(
+        self,
+        jobs: list[RenderJob],
+    ) -> tuple[list[RenderJob], tuple[str, ...]]:
         changed: list[str] = []
         for job in jobs:
             if job.state not in _RECOVER_AS_INTERRUPTED:
@@ -217,6 +278,18 @@ class RenderQueueStore:
         if changed or removed:
             self.save(jobs)
         return jobs, tuple(changed)
+
+    def recover(self) -> tuple[list[RenderJob], tuple[str, ...]]:
+        return self._recover_jobs(self.load())
+
+    def recover_for_startup(self) -> tuple[list[RenderJob], tuple[str, ...]]:
+        """Keep application startup available while preserving corrupt bytes."""
+        try:
+            jobs = self.load()
+        except ValueError as exc:
+            self._quarantine_corrupt_store(exc)
+            return [], ()
+        return self._recover_jobs(jobs)
 
     @staticmethod
     def cleanup_orphan_stages(jobs: Iterable[RenderJob]) -> int:
@@ -246,7 +319,9 @@ class RenderQueue:
 
     def __init__(self, store: RenderQueueStore | None = None) -> None:
         self.store = store or RenderQueueStore()
-        self.jobs, _ = self.store.recover()
+        self.jobs, _ = self.store.recover_for_startup()
+        self.recovery_warning = self.store.last_recovery_warning
+        self.quarantined_path = self.store.quarantined_path
 
     def enqueue(self, job: RenderJob) -> RenderJob:
         """Queue only a job that has already passed real preflight."""

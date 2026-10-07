@@ -133,3 +133,65 @@ def test_production_render_route_uses_step10_surfaces_without_project_mutation(t
         timeout=35,
     )
     assert result.returncode == 0, (result.stdout + "\n" + result.stderr)
+
+
+
+def test_production_window_starts_with_corrupt_queue_quarantined() -> None:
+    script = textwrap.dedent(
+        r'''
+        import os
+        from pathlib import Path
+        import tempfile
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        os.environ.setdefault("FAM_STEP09_PROVIDER", "mock")
+        os.environ.setdefault("FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER", "1")
+        os.environ.setdefault("FAM_STEP11_NO_RECOVERY_PROMPT", "1")
+
+        from PySide6.QtWidgets import QApplication
+        import full_album_maker.render_queue_step10 as queue_module
+
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory(prefix="s10-corrupt-queue-") as root:
+            root = Path(root)
+            queue_module.data_dir = lambda: root
+            queue_dir = root / "render"
+            queue_dir.mkdir(parents=True, exist_ok=True)
+            source = queue_dir / "queue_v1.json"
+            original = b'{"format":"full-album-maker-render-queue","version":1,"jobs":['
+            source.write_bytes(original)
+
+            import full_album_maker.main
+            from full_album_maker.foundation_window import FoundationMainWindow
+
+            window = FoundationMainWindow()
+            app.processEvents()
+
+            assert window._s10_queue.jobs == []
+            quarantined = window._s10_queue.quarantined_path
+            assert quarantined is not None
+            assert quarantined.is_file()
+            assert quarantined.read_bytes() == original
+            assert not source.exists()
+            assert "dikarantina" in window._s10_queue.recovery_warning
+            assert "dikarantina" in window.render_inspector_s10.warning.text()
+
+            window._s10_async.close()
+            window.hide()
+            window.deleteLater()
+            app.processEvents()
+        '''
+    )
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["FAM_STEP09_PROVIDER"] = "mock"
+    env["FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER"] = "1"
+    env["FAM_STEP11_NO_RECOVERY_PROMPT"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=45,
+    )
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
