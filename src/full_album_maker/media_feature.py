@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from . import async_import as async_mod, visual_feature as visual_mod
 from .media_library_model import MediaAddToAlbumCommand, MediaLibraryIndex, MediaType, stable_asset_id
-from .media_library_services import MediaSidecarStore, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
+from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
 from .media_workspace import MediaContextWidget, MediaInspectorWidget, MediaTimelinePreviewCanvas, MediaWorkspace
 
 _installed=False; _originals:dict[str,Any]={}
@@ -174,6 +174,14 @@ def _relinked(self,p):
         QMessageBox.warning(self,'Relink Media','Media pengganti berubah setelah probe. Relink dibatalkan; pilih ulang file.');return
     kind=MediaType(p['kind']); target=next((x for x in _kind_items(self,kind) if canonical_path_key(x.path)==canonical_path_key(p['old'])),None)
     if target is None:return
+    new_key=canonical_path_key(p['new'])
+    duplicate=next((x for x in _kind_items(self,kind) if x is not target and canonical_path_key(x.path)==new_key),None)
+    if duplicate is not None:
+        QMessageBox.warning(self,'Relink Media','File pengganti sudah dipakai media lain di project. Relink dibatalkan agar asset ID dan metadata tidak bertabrakan.');return
+    new_id=stable_asset_id(p['new'],kind)
+    try:self._s03_store.migrate_asset_id(p['asset_id'],new_id,persist=bool(self._foundation_project_path))
+    except (OSError,SidecarMigrationConflict) as exc:
+        QMessageBox.warning(self,'Relink Media',f'Metadata media tidak dapat dimigrasikan dengan aman:\n{exc}\nRelink dibatalkan dan source lama dipertahankan.');return
     target.path=p['new']
     if getattr(self,'timeline_plan',None) is None:target.duration=getattr(probed,'duration',target.duration)
     elif float(getattr(probed,'duration',target.duration) or 0)!=float(getattr(target,'duration',0) or 0):self.log.appendPlainText('Relink selesai; durasi timeline tidak diubah otomatis. Review/rebuild timeline bila diperlukan.')
@@ -183,8 +191,6 @@ def _relinked(self,p):
     if isinstance(order,list):
         for i,value in enumerate(order):
             if canonical_path_key(value)==canonical_path_key(p['old']):order[i]=p['new']
-    try:self._s03_store.migrate_asset_id(p['asset_id'],stable_asset_id(p['new'],kind),persist=bool(self._foundation_project_path))
-    except OSError:pass
     self.refresh();self._s03_refresh(False)
 def _album(self,ids):
     cmd=MediaAddToAlbumCommand(tuple(str(x) for x in ids))
