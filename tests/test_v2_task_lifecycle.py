@@ -18,6 +18,7 @@ from full_album_maker.app_errors import (
 )
 from full_album_maker.app_kernel import build_app_kernel
 from full_album_maker.task_lifecycle import TaskScope, TaskSupervisor
+from full_album_maker.task_owner_inventory import LEGACY_TASK_OWNERS, OWNER_IDS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -226,3 +227,44 @@ def test_task_lifecycle_has_no_qt_subprocess_or_project_state_import() -> None:
             "render_executor_step10",
         )
     )
+
+
+def test_legacy_task_owner_inventory_is_complete_and_points_to_real_files() -> None:
+    expected = {
+        "async-import",
+        "editor-preview-render",
+        "media-preview-cache",
+        "spectrum-preview",
+        "template-thumbnail",
+        "ai-provider",
+        "render-center",
+    }
+    assert OWNER_IDS == expected
+    assert len(LEGACY_TASK_OWNERS) == len(expected)
+    for owner in LEGACY_TASK_OWNERS:
+        path = ROOT / owner.path
+        assert path.is_file(), owner.owner_id
+        source = path.read_text(encoding="utf-8")
+        assert any(marker in source for marker in (
+            "threading.Thread",
+            "ThreadPoolExecutor",
+        )), owner.owner_id
+        assert owner.stale_guard.strip()
+        assert owner.shutdown.strip()
+        assert owner.migration_note.strip()
+
+
+def test_m2_does_not_modify_legacy_owner_modules_by_importing_inventory() -> None:
+    # Inventory is intentionally passive data: importing it cannot import any
+    # owner implementation, Qt, subprocess, or project state.
+    path = ROOT / "src" / "full_album_maker" / "task_owner_inventory.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+    assert not any(name.startswith("PySide6") for name in imported)
+    assert "subprocess" not in imported
+    assert not any("async_import" in name or "render_async" in name for name in imported)
