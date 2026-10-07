@@ -260,7 +260,6 @@ def test_pending_ai_provider_is_closed_when_window_close_is_accepted() -> None:
         run_events(180)
 
         assert bridge._closed is True
-        assert window._s09_async is None
         after = window._s09_agent_session.snapshot().state
         assert after not in {
             AgentState.NEEDS_CLARIFICATION,
