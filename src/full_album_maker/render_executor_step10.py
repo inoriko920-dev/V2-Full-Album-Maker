@@ -348,6 +348,15 @@ class Step10ProcessRunner:
             process.kill()
             raise Step10RenderError("FFmpeg process pipe tidak tersedia.")
 
+        terminate_lock = threading.Lock()
+
+        def stop_process(*, graceful_timeout: float = 3.0) -> None:
+            with terminate_lock:
+                self._terminate_process(
+                    process,
+                    graceful_timeout=graceful_timeout,
+                )
+
         stderr_lines: list[str] = []
         stderr_lock = threading.Lock()
 
@@ -379,7 +388,7 @@ class Step10ProcessRunner:
                 if cancel_watch_stop.is_set():
                     return
                 cancelled_by_watchdog.set()
-                self._terminate_process(process)
+                stop_process()
                 return
 
         cancel_thread: threading.Thread | None = None
@@ -396,7 +405,7 @@ class Step10ProcessRunner:
         try:
             for raw in process.stdout:
                 if cancel_event is not None and cancel_event.is_set():
-                    self._terminate_process(process)
+                    stop_process()
                     raise Step10RenderCancelled("Render dibatalkan oleh pengguna.")
                 line = sanitize_render_log(raw)
                 if "=" not in line:
@@ -468,7 +477,7 @@ class Step10ProcessRunner:
         finally:
             cancel_watch_stop.set()
             if process.poll() is None:
-                self._terminate_process(process, graceful_timeout=1.0)
+                stop_process(graceful_timeout=1.0)
                 if process.poll() is None:
                     try:
                         process.kill()
