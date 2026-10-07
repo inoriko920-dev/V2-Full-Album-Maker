@@ -13,68 +13,49 @@
 - STEP 08 — Feature Parity, Enhancement, AI Agent Reliability — PASS
 - STEP 09 — UI Preservation, Responsiveness, Integration Contract — PASS
 - STEP 10 — Testing, Regression, Stress, Benchmark, Quality Gate — PASS
-- STEP 11 — Windows Portable Build, Release, Rollback, Final Handoff — NEXT
+- STEP 11 — Windows Portable Build, Release, Rollback, Final Handoff — PASS
 
 ## Current State
-STEP 10 is PASS. STEP 11 is next. Coding remains blocked.
+STEP 00–11 planning is COMPLETE.
 
-## STEP 03 Architecture Summary
-Target architecture is layered/ports-and-adapters with one AppKernel/CompositionRoot. Existing behavior is wrapped before replacement. Migration order is M0..M9 and every slice must be rollback-capable.
+Coding remains BLOCKED until the canonical MASTER + STEP00–11 DOCX files are physically present in this V2 repository and match `PLANNING_ARTIFACTS_MANIFEST.md`.
 
-## STEP 04 Hardening Summary
-V2 centralizes async/process ownership, stable project-token/generation guards, deterministic close/project switching, verification-first publication, explicit recovery classification, bounded shutdown, and fault-injection evidence.
-
-## STEP 05 Media / Preview / Timeline / Data Summary
-Canonical media identity is ProjectDocument UUID asset_id. ffprobe is the initial normalized probe adapter. Relink preserves identity. Accurate Preview is the parity oracle. Cache is disposable. Timeline stays at 240000 integer ticks/sec with frozen Packed/Free semantics. Project schema v2 remains frozen.
-
-## STEP 06 Render Summary
-One RenderEngine path owns final rendering; immutable RenderSnapshot + RenderPlan bind each job to a frozen revision. Critical preflight, runtime encoder verification, graph externalization, ffprobe verification, transactional publication, crash-interrupted retry semantics, and long-album one-pass reliability are mandatory.
-
-## STEP 07 Animation Summary
-- Generic animation lives in versioned Layer.animation v1.
-- Typed property registry + deterministic keyframe evaluator.
-- BeatAnalysis derived data is separate from authored BeatResponse.
+## Architecture Summary
+- Layered/ports-and-adapters with AppKernel/CompositionRoot.
+- Existing behavior wrapped before replacement; migration M0..M9.
+- ProjectDocument + EditorController remain authoritative.
+- Task/Process lifecycle becomes explicit and bounded.
+- ffprobe/FFmpeg remain canonical media/render infrastructure.
+- ProjectDocument UUID media IDs remain canonical; relink preserves identity.
+- TIMEBASE=240000 and Packed/Free semantics remain frozen.
+- Accurate Preview is parity oracle.
+- Render uses immutable snapshot/plan + critical preflight + verification + transactional publish.
+- Layer.animation v1 + BeatResponse adds scalable animation without project schema bump.
 - Existing FFmpeg Spectrum remains canonical.
-- Visual transition never silently alters audio timing/crossfade.
-- Accurate Preview vs Final Render golden parity is mandatory for new effect families.
-- Non-reactive fallback is required when beat analysis is unavailable.
-- Preset catalog expands only after a small animation core is proven.
+- All baseline user-facing features are MUST KEEP.
+- AI provider remains planner-only; local registry/dry-run/EditorController own mutation.
+- Existing UI/workflow and all 9 routes are preserved.
+- Existing 115-file test/workflow baseline is the minimum quality floor.
 
-## STEP 08 Feature / AI Summary
-- No user-facing baseline feature removal is authorized.
-- Manual editor remains complete and authoritative.
-- AI provider is planner-only; local registry + dry-run + EditorController own mutations.
-- Current STEP09 safe actions/permissions remain parity-protected.
-- Animation AI actions are added only after animation command contracts exist.
-- AI filesystem path operations and direct render remain deferred.
-- Ambiguity/stale revision/context/permission failure produces zero mutation.
-- One plan = one revision + one Undo.
-- Gemini 100-key pool reliability remains protected.
+## STEP 11 Release Summary
+- First mature V2 stable target is v2.0.0 after implementation/Q5.
+- Stable publication is explicit from exact approved candidate SHA.
+- Exact tested ZIP is the published ZIP and is identified by SHA-256.
+- Windows portable remains primary distribution.
+- Exact extracted-ZIP smoke must prove no global Python/FFmpeg/API-key dependency and verified A/V output.
+- Release facts should converge on one canonical release manifest.
+- THIRD_PARTY_NOTICES currently contains stale FFmpeg provenance and must be corrected before future V2 RC.
+- Current auto-release-on-main behavior and old hardcoded handoff ancestry must be redesigned before V2 stable.
+- Side-by-side portable update/rollback is the initial safe distribution model.
+- Stable release artifacts/tags/checksums remain immutable recovery points.
 
-## STEP 09 UI Summary
-- Existing production UI/workflow is preserved; V2 is not a redesign.
-- All 9 workspace routes and shell mental model remain stable.
-- WorkspaceRegistry/WorkspaceBundle replaces patch ownership route-by-route.
-- Heavy process/network/media/analysis work is forbidden on the UI thread.
-- Required responsive evidence: 1672/100%, 1366/100%, 125%, 150%.
-- Current production UI is the migration no-regression baseline.
-- Frozen canonical goldens remain immutable references.
-- No new UI-image prompt is required for this preservation scope.
+## Pre-Coding Gate
+Before any source implementation:
+- upload canonical final MASTER + STEP00–11 DOCX files to the V2 repo;
+- verify SHA-256 values against `PLANNING_ARTIFACTS_MANIFEST.md`;
+- keep exactly one canonical DOCX per STEP;
+- update status/handoff to mark the gate PASS.
 
-## STEP 10 Quality Summary
-- Existing 115-file suite/workflows are the minimum regression floor.
-- Test/evidence layers span L0 Static/Supply through L7 Release Candidate.
-- FeatureParityRegistry maps MUST KEEP behavior to regression evidence.
-- Facades/adapters require legacy-vs-new contract proof before cleanup.
-- Concurrency, destructive boundaries, and recovery paths require fault/race evidence.
-- Real FFmpeg remains mandatory for affected render/Spectrum paths.
-- 200-song/~3-hour structural stress remains mandatory.
-- Performance >10% regression triggers investigation.
-- Functional UI and pixel-match status are separate.
-- Python >=3.11 support must be tested on 3.11 or changed explicitly.
-- Exact extracted Windows portable ZIP is the final artifact under smoke.
-- Release promotion follows Q0→Q5 and requires an evidence manifest.
+Then implementation starts at M0/T1 FeatureParityRegistry/characterization, followed by additive M1 AppKernel/CompositionRoot.
 
-Detailed DOCX planning artifacts remain the canonical detailed references. Markdown files provide fast status/handoff summaries and do not replace the DOCX files.
-
-After STEP 11 planning completes, all STEP 00–11 source-of-truth planning artifacts must be placed in the V2 repository before coding begins.
+Detailed DOCX planning artifacts are the canonical detailed references. Markdown summaries are fast navigation/handoff aids and do not replace the DOCX files.
