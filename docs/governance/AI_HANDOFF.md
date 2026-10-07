@@ -69,7 +69,7 @@ Verified evidence:
 5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
 6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
 
-Implementation is active. M0/T1 through M4 are completed and gate-protected.
+Implementation is active. M0/T1 through M5 are completed and gate-protected.
 
 ## M0/T1 Implementation Result — PASS
 - Branch: `impl-m0-t1-feature-parity`
@@ -119,11 +119,25 @@ Implementation is active. M0/T1 through M4 are completed and gate-protected.
 - H3 ProcessSupervisor was not silently introduced; existing STEP10 process ownership remains in place.
 - GitHub Actions run `37591981581`: 43 M0–M4/entrypoint tests passed (1 skipped), 38 STEP10 render parity tests passed, 21 render safety/lifecycle tests passed (9 skipped), 2 long-album structural stress tests passed, production canonical Save PASS, nine-workspace characterization PASS, and real-FFmpeg M4 job PASS with 2 tests.
 
+## M5 Implementation Result — PASS
+- Branch: `impl-m5-probe-preview-cache`
+- Added AppKernel-owned `MediaProbeService`, `CacheManager`, and `PreviewEngine`.
+- Media import/relink probe paths route through MediaProbeService while current FFprobe/FFmpeg/image/tag behavior remains the adapter.
+- SourceFingerprint exposes F0/F1/F2/F3 tiers and never performs F3 full hashing automatically.
+- Accurate Preview routes through PreviewEngine and still uses the current Step08 compiler semantics.
+- Existing MediaPreviewCache generation/de-dup/stale guards remain in place behind PreviewEngine.
+- Spectrum Accurate Preview and existing Spectrum/template-thumbnail cache roots route through the M5 facades without payload-format changes.
+- Media-preview corrupt/missing/zero-byte/version-mismatch entries are disposable cache misses.
+- No M6 Beat Analysis, M7 WorkspaceRegistry, UI redesign, schema bump, dependency, compiler, or release work was performed.
+- GitHub Actions run `37594113013`: 50 M0–M5 contracts passed (2 skipped), 9 focused probe/preview/cache parity tests passed, 12 persistence/production-shell tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M5 job PASS with 3 tests.
+- Detailed records: `docs/implementation/M5_PROBE_PREVIEW_CACHE.md` and `docs/implementation/M5_EVIDENCE.md`.
+
 ## Next Work
-- M5: Probe / Preview / Cache only.
-- Wrap current proven probe, accurate-preview, and cache behavior behind the approved service facades before replacing ownership.
-- Preserve current composition semantics, generation invalidation, and cache/stale-result safety.
-- Do not proceed to M6 until M5 gate PASS.
+- M6: Beat Analysis only.
+- Re-read the STEP 07 canonical planning decisions before implementation.
+- Preserve master-audio timing, deterministic derived analysis inputs, and non-reactive fallback behavior.
+- Reuse the M2 lifecycle boundary and M5 cache/application-service ownership rather than creating parallel worker/cache owners.
+- Do not proceed to M7 until M6 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -134,4 +148,5 @@ Implementation is active. M0/T1 through M4 are completed and gate-protected.
 - M2 Task Lifecycle/TaskSupervisor/TaskScope: PASS
 - M3 ProjectPersistence: PASS
 - M4 RenderEngine Facade: PASS
-- Next operational action: M5 Probe / Preview / Cache only; then report gate before M6.
+- M5 MediaProbeService / PreviewEngine / CacheManager: PASS
+- Next operational action: M6 Beat Analysis only; then report gate before M7.

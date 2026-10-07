@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M4 RENDER FACADE
+IMPLEMENTATION — M5 PROBE / PREVIEW / CACHE
 
 ## Current STEP
-M4 — RenderEngine Facade — PASS
+M5 — Probe / Preview / Cache — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M4 — RenderEngine Facade — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, M3, and M4 are implemented and validated.
+M0/T1, M1, M2, M3, M4, and M5 are implemented and validated.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -65,14 +65,28 @@ M4 result:
 
 Validated implementation candidate `5f7a428945102f08197bdbe91d7036fbff91c750` on Actions run `37591981581`: Q0 compile PASS; 43 M0–M4/entrypoint tests passed (1 skipped); 38 STEP10 render parity tests passed; 21 render safety/lifecycle tests passed (9 skipped); 2 long-album structural stress tests passed; production canonical Save PASS; nine-workspace read-only navigation PASS; real-FFmpeg M4 job PASS with 2 tests.
 
+M5 result:
+- AppKernel/CompositionRoot now owns one `MediaProbeService`, one `CacheManager`, and one `PreviewEngine`;
+- media import/relink probing routes through MediaProbeService while current ffprobe/FFmpeg/image/tag behavior remains the adapter;
+- `SourceFingerprint` formalizes F0/F1/F2/F3 tiers without automatic full-file hashing;
+- Accurate Preview routes through PreviewEngine and still delegates to the existing Step08 compiler path;
+- Media and decoded-video preview queues are created through PreviewEngine while existing generation/stale-result guards remain intact;
+- CacheManager centralizes namespace/version/root/eviction policy while existing payload formats and existing media-preview/Spectrum/template-thumbnail roots remain unchanged;
+- corrupt, missing, zero-byte, or version-mismatched media-preview cache entries are disposable misses and are regenerated;
+- Spectrum Accurate Preview/default cache root and template-thumbnail default cache root now route through the M5 facades;
+- ProjectDocument schema v2, TIMEBASE=240000, timeline semantics, UI, render compiler chain, dependencies, and release behavior remain unchanged;
+- M6 Beat Analysis and M7 WorkspaceRegistry were not started.
+
+Validated runtime candidate `6aa2a14a3bb52d0b598cba19526c3b99191adedd` on Actions run `37594113013`: Q0 compile PASS; 50 M0–M5 contract tests passed (2 skipped); 9 focused probe/preview/cache parity tests passed; 12 persistence/production-shell tests passed; 2 long-album structural stress tests passed; real-FFmpeg M5 job PASS with 3 tests.
+
 ## Next Operational Step
-M4 is PASS. On the next explicit implementation turn:
-1. Start **M5 — Probe / Preview / Cache** only.
-2. Introduce the approved MediaProbeService / PreviewEngine / CacheManager facades around current proven implementations before replacing ownership.
-3. Preserve Accurate Preview composition semantics and current cache-generation/stale-result protections.
-4. Do not start M6 Beat Analysis, M7 Workspace Registry, UI redesign, schema bump, dependency/release work in M5.
-5. Run focused preview/probe/cache parity and affected real-FFmpeg evidence before reporting M5 PASS.
-6. Do not proceed to M6 in the same turn unless explicitly instructed otherwise.
+M5 is PASS. On the next explicit implementation turn:
+1. Start **M6 — Beat Analysis** only.
+2. Read the STEP 07 canonical planning decisions and current M5 cache/preview contracts before implementation.
+3. Preserve master-audio timing and existing non-reactive fallback behavior.
+4. Reuse the approved lifecycle/cache/application-service boundaries; do not redesign UI or project schema during M6.
+5. Run focused beat-reactive, preview/render parity, fallback, and affected real-FFmpeg evidence before reporting M6 PASS.
+6. Do not proceed to M7 Workspace Registry in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.
