@@ -215,8 +215,7 @@ class MediaSidecarStore:
         if target is None:
             return {}
         self._records = _read_sidecar_records(target, self.VERSION)
-        self._dirty_records.clear()
-        self._pending_migrations.clear()
+        self._clear_local_pending()
         return dict(self._records)
 
     def get(self, asset_id: str) -> SidecarRecord:
@@ -230,6 +229,24 @@ class MediaSidecarStore:
             self.load()
         return dict(self._records)
 
+    def _apply_local_pending(
+        self,
+        latest: dict[str, SidecarRecord],
+    ) -> dict[str, SidecarRecord]:
+        for old_id, new_id in self._pending_migrations:
+            old = latest.pop(old_id, None)
+            if old is not None and new_id not in latest:
+                latest[new_id] = old
+        for dirty_id in tuple(self._dirty_records):
+            local = self._records.get(dirty_id)
+            if local is not None:
+                latest[dirty_id] = local
+        return latest
+
+    def _clear_local_pending(self) -> None:
+        self._dirty_records.clear()
+        self._pending_migrations.clear()
+
     def _commit_single_record(self, asset_id: str, record: SidecarRecord) -> None:
         target = self.path
         if target is None:
@@ -237,12 +254,14 @@ class MediaSidecarStore:
             self._dirty_records.add(asset_id)
             return
         with _sidecar_file_lock(target):
-            latest = _read_sidecar_records(target, self.VERSION)
+            latest = self._apply_local_pending(
+                _read_sidecar_records(target, self.VERSION)
+            )
             latest[asset_id] = record
             _write_sidecar_records(target, self.VERSION, latest)
         self._records = latest
         self._loaded = True
-        self._dirty_records.discard(asset_id)
+        self._clear_local_pending()
 
     def set(self, asset_id: str, record: SidecarRecord, *, persist: bool = True) -> None:
         if not self._loaded:
@@ -269,7 +288,9 @@ class MediaSidecarStore:
         target = self.path
         if persist and target is not None:
             with _sidecar_file_lock(target):
-                latest = _read_sidecar_records(target, self.VERSION)
+                latest = self._apply_local_pending(
+                    _read_sidecar_records(target, self.VERSION)
+                )
                 current = latest.get(key, SidecarRecord())
                 record = SidecarRecord(
                     favorite=current.favorite if favorite is None else bool(favorite),
@@ -282,7 +303,7 @@ class MediaSidecarStore:
                 _write_sidecar_records(target, self.VERSION, latest)
             self._records = latest
             self._loaded = True
-            self._dirty_records.discard(key)
+            self._clear_local_pending()
             return record
 
         current = self.get(key)
@@ -305,15 +326,16 @@ class MediaSidecarStore:
         target = self.path
         if persist and target is not None:
             with _sidecar_file_lock(target):
-                latest = _read_sidecar_records(target, self.VERSION)
+                latest = self._apply_local_pending(
+                    _read_sidecar_records(target, self.VERSION)
+                )
                 old = latest.pop(old_id, None)
                 if old is not None and new_id not in latest:
                     latest[new_id] = old
                 _write_sidecar_records(target, self.VERSION, latest)
             self._records = latest
             self._loaded = True
-            self._dirty_records.discard(old_id)
-            self._dirty_records.discard(new_id)
+            self._clear_local_pending()
             return
 
         if not self._loaded:
@@ -333,15 +355,9 @@ class MediaSidecarStore:
             self.load()
 
         with _sidecar_file_lock(target):
-            latest = _read_sidecar_records(target, self.VERSION)
-            for old_id, new_id in self._pending_migrations:
-                old = latest.pop(old_id, None)
-                if old is not None and new_id not in latest:
-                    latest[new_id] = old
-            for asset_id in tuple(self._dirty_records):
-                record = self._records.get(asset_id)
-                if record is not None:
-                    latest[asset_id] = record
+            latest = self._apply_local_pending(
+                _read_sidecar_records(target, self.VERSION)
+            )
             _write_sidecar_records(target, self.VERSION, latest)
 
         self._records = latest
