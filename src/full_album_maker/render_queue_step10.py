@@ -254,8 +254,10 @@ class RenderQueueStore:
             encoding="utf-8",
         )
 
-    def recover(self) -> tuple[list[RenderJob], tuple[str, ...]]:
-        jobs = self.load()
+    def _recover_jobs(
+        self,
+        jobs: list[RenderJob],
+    ) -> tuple[list[RenderJob], tuple[str, ...]]:
         changed: list[str] = []
         for job in jobs:
             if job.state not in _RECOVER_AS_INTERRUPTED:
@@ -276,6 +278,18 @@ class RenderQueueStore:
         if changed or removed:
             self.save(jobs)
         return jobs, tuple(changed)
+
+    def recover(self) -> tuple[list[RenderJob], tuple[str, ...]]:
+        return self._recover_jobs(self.load())
+
+    def recover_for_startup(self) -> tuple[list[RenderJob], tuple[str, ...]]:
+        """Keep application startup available while preserving corrupt bytes."""
+        try:
+            jobs = self.load()
+        except ValueError as exc:
+            self._quarantine_corrupt_store(exc)
+            return [], ()
+        return self._recover_jobs(jobs)
 
     @staticmethod
     def cleanup_orphan_stages(jobs: Iterable[RenderJob]) -> int:
@@ -305,7 +319,9 @@ class RenderQueue:
 
     def __init__(self, store: RenderQueueStore | None = None) -> None:
         self.store = store or RenderQueueStore()
-        self.jobs, _ = self.store.recover()
+        self.jobs, _ = self.store.recover_for_startup()
+        self.recovery_warning = self.store.last_recovery_warning
+        self.quarantined_path = self.store.quarantined_path
 
     def enqueue(self, job: RenderJob) -> RenderJob:
         """Queue only a job that has already passed real preflight."""
