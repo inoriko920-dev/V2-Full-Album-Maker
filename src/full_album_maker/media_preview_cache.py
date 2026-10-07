@@ -283,7 +283,11 @@ def _call_generate_preview(
     cache_manager: CacheManager,
     publish_guard: Callable[[], bool],
 ) -> str:
-    """Call the current generator while preserving legacy test/adapter shape."""
+    """Call the current generator while preserving legacy test/adapter shape.
+
+    Adapters that do not yet accept publish_guard remain supported; stale output
+    from those adapters is still discarded by the worker after generation.
+    """
 
     try:
         parameters = inspect.signature(generate_preview).parameters
