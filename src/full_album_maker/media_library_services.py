@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import threading
 import time
 from typing import Any, Iterable, Iterator, Mapping
+from uuid import uuid4
 
 from .media_library_model import (
     MediaAsset, MediaMetadata, MediaStatus, MediaType, normalize_tags, stable_asset_id,
@@ -104,21 +107,96 @@ def _sidecar_file_lock(target: Path) -> Iterator[None]:
         handle.close()
 
 
+class SidecarStoreError(OSError):
+    """Base error for media sidecar persistence failures."""
+
+
+class SidecarCorruptionError(SidecarStoreError):
+    """Raised when an existing sidecar cannot be trusted or parsed safely."""
+
+
+class SidecarUnsupportedVersion(SidecarStoreError):
+    """Raised when a newer/unknown sidecar schema must not be overwritten."""
+
+
+def _validate_sidecar_record(asset_id: object, value: object) -> None:
+    if not isinstance(asset_id, str) or not asset_id:
+        raise SidecarCorruptionError("ID asset sidecar tidak valid.")
+    if not isinstance(value, dict):
+        raise SidecarCorruptionError(
+            f"Record sidecar {asset_id!r} bukan object JSON."
+        )
+    if "favorite" in value and not isinstance(value["favorite"], bool):
+        raise SidecarCorruptionError(
+            f"Field favorite record {asset_id!r} tidak valid."
+        )
+    for name in ("tags", "collections"):
+        if name not in value:
+            continue
+        raw = value[name]
+        if (
+            not isinstance(raw, list)
+            or not all(isinstance(item, str) for item in raw)
+        ):
+            raise SidecarCorruptionError(
+                f"Field {name} record {asset_id!r} tidak valid."
+            )
+    if "description" in value and not isinstance(value["description"], str):
+        raise SidecarCorruptionError(
+            f"Field description record {asset_id!r} tidak valid."
+        )
+    if "imported_at" in value:
+        raw = value["imported_at"]
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise SidecarCorruptionError(
+                f"Field imported_at record {asset_id!r} tidak valid."
+            )
+
+
 def _read_sidecar_records(target: Path, version: int) -> dict[str, "SidecarRecord"]:
+    if not target.exists():
+        return {}
     try:
-        raw = json.loads(target.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
+        text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
-    if not isinstance(raw, dict) or raw.get("version") != version:
-        return {}
+    except (OSError, UnicodeError) as exc:
+        raise SidecarCorruptionError(
+            f"Sidecar metadata tidak dapat dibaca: {exc}"
+        ) from exc
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SidecarCorruptionError(
+            f"Sidecar metadata JSON rusak: {exc}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise SidecarCorruptionError("Root sidecar metadata bukan object JSON.")
+    found_version = raw.get("version")
+    if found_version != version:
+        raise SidecarUnsupportedVersion(
+            f"Versi sidecar metadata tidak didukung: {found_version!r} "
+            f"(aplikasi mendukung {version})."
+        )
     records = raw.get("records")
     if not isinstance(records, dict):
-        return {}
+        raise SidecarCorruptionError("Field records sidecar metadata tidak valid.")
     clean: dict[str, SidecarRecord] = {}
     for asset_id, value in records.items():
-        if isinstance(asset_id, str) and isinstance(value, dict):
-            clean[asset_id] = SidecarRecord.from_mapping(value)
+        _validate_sidecar_record(asset_id, value)
+        clean[asset_id] = SidecarRecord.from_mapping(value)
     return clean
+
+
+def _cleanup_sidecar_temps(target: Path) -> int:
+    removed = 0
+    for candidate in target.parent.glob(f"{target.name}.*.tmp"):
+        try:
+            candidate.unlink(missing_ok=True)
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def _write_sidecar_records(
