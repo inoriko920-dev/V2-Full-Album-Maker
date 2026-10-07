@@ -244,6 +244,7 @@ def test_live_instance_recovery_is_not_offered_or_deleted(
         fake = _Fake()
         fake._s11_project_token = token
         fake._s11_recovery_session = observer
+        observer.session_alive = lambda session_id: session_id == owner.session_id
         fake._s11_project_path = lambda: str(canonical_path)
         fake.foundation_state = _Status()
 
@@ -274,4 +275,56 @@ def test_closed_recovery_session_is_detected_as_dead(tmp_path: Path) -> None:
         assert observer.session_alive(owner_id) is False
     finally:
         owner.close()
+        observer.close()
+
+
+
+def test_recovery_session_lease_tracks_real_second_process(tmp_path: Path) -> None:
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    root = tmp_path / "recovery"
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(repo_root / "src") + (
+        os.pathsep + existing if existing else ""
+    )
+    script = textwrap.dedent(
+        r"""
+        import sys
+        import time
+        from pathlib import Path
+        from full_album_maker.integration_lifecycle_step11 import RecoverySessionLease
+
+        lease = RecoverySessionLease(Path(sys.argv[1]), "external-owner")
+        lease.start()
+        print("LOCKED", flush=True)
+        time.sleep(30)
+        """
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(root)],
+        cwd=repo_root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    observer = RecoverySessionLease(root, "observer")
+    observer.start()
+    try:
+        assert process.stdout is not None
+        assert process.stdout.readline().strip() == "LOCKED"
+        assert observer.session_alive("external-owner") is True
+
+        process.terminate()
+        process.wait(timeout=5)
+        assert observer.session_alive("external-owner") is False
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
         observer.close()
