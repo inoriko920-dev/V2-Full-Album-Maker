@@ -13,6 +13,7 @@ from full_album_maker.editor_models import MediaAsset, ProjectDocument, SongInst
 from full_album_maker.render_center_model_step10 import (
     RenderJob,
     RenderJobState,
+    RenderMetrics,
     build_render_snapshot,
     settings_from_preset,
 )
@@ -410,7 +411,7 @@ def test_stale_instance_cannot_overwrite_attempt_owned_by_live_process(
         stale_copy = next(
             item for item in stale.jobs if item.attempt_id == job.attempt_id
         )
-        stale_copy.metrics.percent = 99.0
+        stale_copy.metrics = RenderMetrics(percent=99.0)
         with pytest.raises(ValueError, match="dimiliki instance aplikasi lain"):
             stale.update(stale_copy)
 
