@@ -94,7 +94,7 @@ def _restore_document(self) -> None:
         merged.playlist.entries = entries
         merged.validate()
     self.editor_workspace.set_document(merged)
-    self._capture_document()
+    self._s04_capture_document()
 
 
 def _replace_workspace(self) -> None:
