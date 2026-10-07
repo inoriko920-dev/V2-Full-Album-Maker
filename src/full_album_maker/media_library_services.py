@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import json
 import os
@@ -38,6 +39,127 @@ def canonical_path_key(path: str | Path) -> str:
     return os.path.normcase(str(source))
 
 
+_SIDECAR_LOCK_TIMEOUT_SECONDS = 2.0
+
+
+def _lock_file_handle(handle) -> bool:
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+
+    import fcntl
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock_file_handle(handle) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+
+
+@contextmanager
+def _sidecar_file_lock(target: Path) -> Iterator[None]:
+    lock_path = target.with_name(f".{target.name}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    handle = os.fdopen(fd, "r+b", buffering=0)
+    try:
+        if os.fstat(handle.fileno()).st_size == 0:
+            handle.write(b"0")
+            handle.flush()
+        deadline = time.monotonic() + _SIDECAR_LOCK_TIMEOUT_SECONDS
+        while not _lock_file_handle(handle):
+            if time.monotonic() >= deadline:
+                raise OSError(
+                    "Metadata Media sedang disimpan oleh instance aplikasi lain. "
+                    "Coba lagi sesaat."
+                )
+            time.sleep(0.02)
+        try:
+            yield
+        finally:
+            _unlock_file_handle(handle)
+    finally:
+        handle.close()
+
+
+def _read_sidecar_records(target: Path, version: int) -> dict[str, "SidecarRecord"]:
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict) or raw.get("version") != version:
+        return {}
+    records = raw.get("records")
+    if not isinstance(records, dict):
+        return {}
+    clean: dict[str, SidecarRecord] = {}
+    for asset_id, value in records.items():
+        if isinstance(asset_id, str) and isinstance(value, dict):
+            clean[asset_id] = SidecarRecord.from_mapping(value)
+    return clean
+
+
+def _write_sidecar_records(
+    target: Path,
+    version: int,
+    records: Mapping[str, "SidecarRecord"],
+) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": version,
+        "records": {
+            key: {
+                "favorite": value.favorite,
+                "tags": list(value.tags),
+                "description": value.description,
+                "collections": list(value.collections),
+                "imported_at": value.imported_at,
+            }
+            for key, value in sorted(records.items())
+        },
+    }
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    fd, tmp = tempfile.mkstemp(
+        prefix=target.name + ".",
+        suffix=".tmp",
+        dir=str(target.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 @dataclass(frozen=True)
 class SidecarRecord:
     favorite: bool = False
@@ -68,13 +190,7 @@ class SidecarRecord:
 
 
 class MediaSidecarStore:
-    """Optional per-project metadata without changing recovered project schema v1.
-
-    The sidecar lives beside a saved project as `<project>.media.json`. It never
-    contains source-file bytes and can be regenerated for core media indexing.
-    Unsaved/recovery projects may use this store in-memory until a project path
-    exists; callers should not claim persistence in that state.
-    """
+    """Per-project media metadata with merge-safe cross-process persistence."""
 
     VERSION = 1
 
@@ -82,12 +198,14 @@ class MediaSidecarStore:
         self.project_path = Path(project_path).expanduser() if project_path else None
         self._records: dict[str, SidecarRecord] = {}
         self._loaded = False
+        self._dirty_records: set[str] = set()
+        self._pending_migrations: list[tuple[str, str]] = []
 
     @property
     def path(self) -> Path | None:
         if self.project_path is None:
             return None
-        return self.project_path.with_suffix(self.project_path.suffix + '.media.json')
+        return self.project_path.with_suffix(self.project_path.suffix + ".media.json")
 
     def load(self) -> dict[str, SidecarRecord]:
         if self._loaded:
@@ -96,45 +214,78 @@ class MediaSidecarStore:
         target = self.path
         if target is None:
             return {}
-        try:
-            raw = json.loads(target.read_text(encoding='utf-8'))
-        except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
-            return {}
-        if not isinstance(raw, dict) or raw.get('version') != self.VERSION:
-            return {}
-        records = raw.get('records')
-        if not isinstance(records, dict):
-            return {}
-        clean: dict[str, SidecarRecord] = {}
-        for asset_id, value in records.items():
-            if isinstance(asset_id, str) and isinstance(value, dict):
-                clean[asset_id] = SidecarRecord.from_mapping(value)
-        self._records = clean
-        return dict(clean)
+        self._records = _read_sidecar_records(target, self.VERSION)
+        self._dirty_records.clear()
+        self._pending_migrations.clear()
+        return dict(self._records)
 
     def get(self, asset_id: str) -> SidecarRecord:
         if not self._loaded:
             self.load()
-        return self._records.get(asset_id, SidecarRecord())
+        return self._records.get(str(asset_id), SidecarRecord())
 
     def records(self) -> dict[str, SidecarRecord]:
-        """Return a copy for safe rebinding when an unsaved project gets a path."""
+        """Return current local view, including unpersisted records."""
         if not self._loaded:
             self.load()
         return dict(self._records)
 
+    def _commit_single_record(self, asset_id: str, record: SidecarRecord) -> None:
+        target = self.path
+        if target is None:
+            self._records[asset_id] = record
+            self._dirty_records.add(asset_id)
+            return
+        with _sidecar_file_lock(target):
+            latest = _read_sidecar_records(target, self.VERSION)
+            latest[asset_id] = record
+            _write_sidecar_records(target, self.VERSION, latest)
+        self._records = latest
+        self._loaded = True
+        self._dirty_records.discard(asset_id)
+
     def set(self, asset_id: str, record: SidecarRecord, *, persist: bool = True) -> None:
         if not self._loaded:
             self.load()
-        self._records[str(asset_id)] = record
-        if persist:
-            self.save()
+        key = str(asset_id)
+        if persist and self.path is not None:
+            self._commit_single_record(key, record)
+            return
+        self._records[key] = record
+        self._dirty_records.add(key)
 
-    def update(self, asset_id: str, *, favorite: bool | None = None,
-               tags: Iterable[str] | None = None, description: str | None = None,
-               collections: Iterable[str] | None = None, imported_at: float | None = None,
-               persist: bool = True) -> SidecarRecord:
-        current = self.get(asset_id)
+    def update(
+        self,
+        asset_id: str,
+        *,
+        favorite: bool | None = None,
+        tags: Iterable[str] | None = None,
+        description: str | None = None,
+        collections: Iterable[str] | None = None,
+        imported_at: float | None = None,
+        persist: bool = True,
+    ) -> SidecarRecord:
+        key = str(asset_id)
+        target = self.path
+        if persist and target is not None:
+            with _sidecar_file_lock(target):
+                latest = _read_sidecar_records(target, self.VERSION)
+                current = latest.get(key, SidecarRecord())
+                record = SidecarRecord(
+                    favorite=current.favorite if favorite is None else bool(favorite),
+                    tags=current.tags if tags is None else normalize_tags(tags),
+                    description=current.description if description is None else str(description).strip(),
+                    collections=current.collections if collections is None else normalize_tags(collections),
+                    imported_at=current.imported_at if imported_at is None else max(0.0, float(imported_at)),
+                )
+                latest[key] = record
+                _write_sidecar_records(target, self.VERSION, latest)
+            self._records = latest
+            self._loaded = True
+            self._dirty_records.discard(key)
+            return record
+
+        current = self.get(key)
         record = SidecarRecord(
             favorite=current.favorite if favorite is None else bool(favorite),
             tags=current.tags if tags is None else normalize_tags(tags),
@@ -142,52 +293,61 @@ class MediaSidecarStore:
             collections=current.collections if collections is None else normalize_tags(collections),
             imported_at=current.imported_at if imported_at is None else max(0.0, float(imported_at)),
         )
-        self.set(asset_id, record, persist=persist)
+        self._records[key] = record
+        self._dirty_records.add(key)
         return record
 
     def migrate_asset_id(self, old_id: str, new_id: str, *, persist: bool = True) -> None:
+        old_id = str(old_id)
+        new_id = str(new_id)
         if old_id == new_id:
             return
+        target = self.path
+        if persist and target is not None:
+            with _sidecar_file_lock(target):
+                latest = _read_sidecar_records(target, self.VERSION)
+                old = latest.pop(old_id, None)
+                if old is not None and new_id not in latest:
+                    latest[new_id] = old
+                _write_sidecar_records(target, self.VERSION, latest)
+            self._records = latest
+            self._loaded = True
+            self._dirty_records.discard(old_id)
+            self._dirty_records.discard(new_id)
+            return
+
         if not self._loaded:
             self.load()
         old = self._records.pop(old_id, None)
         if old is not None and new_id not in self._records:
             self._records[new_id] = old
-        if persist:
-            self.save()
+            self._dirty_records.add(new_id)
+        self._dirty_records.discard(old_id)
+        self._pending_migrations.append((old_id, new_id))
 
     def save(self) -> bool:
         target = self.path
         if target is None:
             return False
-        target.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            'version': self.VERSION,
-            'records': {
-                key: {
-                    'favorite': value.favorite,
-                    'tags': list(value.tags),
-                    'description': value.description,
-                    'collections': list(value.collections),
-                    'imported_at': value.imported_at,
-                }
-                for key, value in sorted(self._records.items())
-            },
-        }
-        text = json.dumps(payload, ensure_ascii=False, indent=2) + '\n'
-        fd, tmp = tempfile.mkstemp(prefix=target.name + '.', suffix='.tmp', dir=str(target.parent))
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as handle:
-                handle.write(text)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(tmp, target)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            raise
+        if not self._loaded:
+            self.load()
+
+        with _sidecar_file_lock(target):
+            latest = _read_sidecar_records(target, self.VERSION)
+            for old_id, new_id in self._pending_migrations:
+                old = latest.pop(old_id, None)
+                if old is not None and new_id not in latest:
+                    latest[new_id] = old
+            for asset_id in tuple(self._dirty_records):
+                record = self._records.get(asset_id)
+                if record is not None:
+                    latest[asset_id] = record
+            _write_sidecar_records(target, self.VERSION, latest)
+
+        self._records = latest
+        self._loaded = True
+        self._dirty_records.clear()
+        self._pending_migrations.clear()
         return True
 
 
