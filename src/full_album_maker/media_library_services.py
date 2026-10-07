@@ -347,6 +347,53 @@ class MediaSidecarStore:
         self._dirty_records.discard(old_id)
         self._pending_migrations.append((old_id, new_id))
 
+    def rebind_project_path(
+        self,
+        project_path: str | Path | None,
+        *,
+        carry_current: bool = True,
+        persist: bool = True,
+    ) -> bool:
+        """Move this store to a new project path without losing local metadata.
+
+        First-save and Save As keep the same in-memory project object, so media
+        metadata must follow to the new <project>.media.json. Opening a different
+        project should instead construct/load a fresh store and pass
+        carry_current=False at the caller boundary.
+        """
+
+        new_path = Path(project_path).expanduser() if project_path else None
+        old_path = self.project_path
+        if old_path == new_path:
+            return False
+
+        if not self._loaded:
+            self.load()
+
+        current_records = dict(self._records)
+        current_migrations = list(self._pending_migrations)
+
+        self.project_path = new_path
+        if not carry_current:
+            self._records = {}
+            self._loaded = False
+            self._clear_local_pending()
+            self.load()
+            return True
+
+        # The current project snapshot is authoritative for records it already
+        # knows about. Mark every carried record dirty so save() merges it into
+        # any destination-sidecar records written by another process rather than
+        # replacing the whole destination snapshot.
+        self._records = current_records
+        self._loaded = True
+        self._dirty_records = set(current_records)
+        self._pending_migrations = current_migrations
+
+        if persist and self.path is not None:
+            self.save()
+        return True
+
     def save(self) -> bool:
         target = self.path
         if target is None:
