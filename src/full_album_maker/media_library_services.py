@@ -546,13 +546,18 @@ class MediaSidecarStore:
             baseline = self._records.get(key, SidecarRecord())
             with _sidecar_file_lock(target):
                 disk_latest = self._read_latest_for_write(target)
-                disk_current = disk_latest.get(key, SidecarRecord())
-                _assert_no_same_field_conflict(
-                    key,
-                    baseline,
-                    disk_current,
-                    requested,
+                rebuilding_after_quarantine = (
+                    self.quarantined_path is not None
+                    and not target.exists()
                 )
+                disk_current = disk_latest.get(key, SidecarRecord())
+                if not rebuilding_after_quarantine:
+                    _assert_no_same_field_conflict(
+                        key,
+                        baseline,
+                        disk_current,
+                        requested,
+                    )
                 latest = self._apply_local_pending(disk_latest)
                 current = latest.get(key, SidecarRecord())
                 values = {
