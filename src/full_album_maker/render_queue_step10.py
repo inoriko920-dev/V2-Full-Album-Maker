@@ -20,13 +20,52 @@ from .render_executor_step10 import sanitize_render_log
 QUEUE_FORMAT = "full-album-maker-render-queue"
 QUEUE_VERSION = 1
 MAX_HISTORY = 200
-_ACTIVE_ON_CRASH = {
+_LIVE_ACTIVE_STATES = {
     RenderJobState.PREFLIGHTING,
     RenderJobState.STARTING,
     RenderJobState.RUNNING,
     RenderJobState.PAUSED,
     RenderJobState.FINALIZING,
 }
+_RECOVER_AS_INTERRUPTED = {
+    RenderJobState.DRAFT,
+    *_LIVE_ACTIVE_STATES,
+}
+_TERMINAL_HISTORY_STATES = {
+    RenderJobState.COMPLETED,
+    RenderJobState.FAILED,
+    RenderJobState.CANCELLED,
+    RenderJobState.BLOCKED,
+    RenderJobState.INTERRUPTED,
+}
+
+
+def _bounded_history(jobs: Iterable[RenderJob]) -> list[RenderJob]:
+    """Trim terminal history without ever dropping unfinished work.
+
+    MAX_HISTORY is a retention target for old terminal attempts, not permission
+    to discard live/queued/retry work. If unfinished work alone exceeds the
+    target, keep it all and temporarily exceed MAX_HISTORY.
+    """
+    values = list(jobs)
+    if len(values) <= MAX_HISTORY:
+        return values
+
+    protected_indices = [
+        index
+        for index, job in enumerate(values)
+        if job.state not in _TERMINAL_HISTORY_STATES
+    ]
+    remaining = max(0, MAX_HISTORY - len(protected_indices))
+    terminal_indices = [
+        index
+        for index, job in enumerate(values)
+        if job.state in _TERMINAL_HISTORY_STATES
+    ]
+    keep = set(protected_indices)
+    if remaining:
+        keep.update(terminal_indices[-remaining:])
+    return [job for index, job in enumerate(values) if index in keep]
 
 
 def _snapshot_to_dict(value: RenderSnapshot) -> dict:
@@ -144,7 +183,7 @@ class RenderQueueStore:
         return [job_from_dict(item) for item in values]
 
     def save(self, jobs: Iterable[RenderJob]) -> None:
-        values = list(jobs)[-MAX_HISTORY:]
+        values = _bounded_history(jobs)
         payload = {
             "format": QUEUE_FORMAT,
             "version": QUEUE_VERSION,
@@ -160,7 +199,7 @@ class RenderQueueStore:
         jobs = self.load()
         changed: list[str] = []
         for job in jobs:
-            if job.state not in _ACTIVE_ON_CRASH:
+            if job.state not in _RECOVER_AS_INTERRUPTED:
                 continue
             # Recovery is intentionally not a normal state transition: the old
             # process no longer exists, so claiming resume semantics would be false.
@@ -224,7 +263,7 @@ class RenderQueue:
         return job
 
     def next_queued(self) -> RenderJob | None:
-        if any(job.state in _ACTIVE_ON_CRASH for job in self.jobs):
+        if any(job.state in _LIVE_ACTIVE_STATES for job in self.jobs):
             return None
         return next(
             (job for job in self.jobs if job.state == RenderJobState.QUEUED),
@@ -259,6 +298,5 @@ class RenderQueue:
         return retry
 
     def _trim_and_save(self) -> None:
-        if len(self.jobs) > MAX_HISTORY:
-            self.jobs = self.jobs[-MAX_HISTORY:]
+        self.jobs = _bounded_history(self.jobs)
         self.store.save(self.jobs)

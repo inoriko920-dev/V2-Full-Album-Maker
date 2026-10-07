@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from full_album_maker import render_queue_step10 as queue_module
 from full_album_maker.editor_models import MediaAsset, ProjectDocument, SongInstance, TIMEBASE
 from full_album_maker.render_center_model_step10 import (
     RenderJob,
@@ -148,3 +149,79 @@ def test_corrupt_queue_store_fails_closed_instead_of_silently_dropping_history(t
     store = RenderQueueStore(path)
     with pytest.raises(ValueError, match="rusak"):
         store.load()
+
+
+
+def test_restart_marks_persisted_draft_attempt_interrupted_and_retryable(tmp_path: Path) -> None:
+    store = RenderQueueStore(tmp_path / "queue.json")
+    draft = _job(tmp_path, "draft-crash-window")
+    # Production Render Now persists the attempt before the worker has had a
+    # chance to advance DRAFT -> PREFLIGHTING. A crash in that short window
+    # must not leave an unretryable DRAFT stranded forever.
+    store.save([draft])
+
+    queue = RenderQueue(store)
+
+    assert len(queue.jobs) == 1
+    recovered = queue.jobs[0]
+    assert recovered.state == RenderJobState.INTERRUPTED
+    assert recovered.error_code == "INTERRUPTED_ON_RESTART"
+    retry = queue.retry(recovered.job_id, recovered.attempt_id)
+    assert retry.state == RenderJobState.DRAFT
+    assert retry.attempt_id != recovered.attempt_id
+
+
+def test_history_trim_never_drops_unfinished_jobs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(queue_module, "MAX_HISTORY", 3)
+    store = RenderQueueStore(tmp_path / "queue.json")
+
+    running = _job(tmp_path, "running-kept")
+    _mark_ready(running)
+    running.transition(RenderJobState.STARTING)
+    running.transition(RenderJobState.RUNNING)
+
+    queued = _job(tmp_path, "queued-kept")
+    _mark_ready(queued)
+    queued.transition(RenderJobState.QUEUED)
+
+    terminals: list[RenderJob] = []
+    for index in range(4):
+        job = _job(tmp_path, f"done-{index}")
+        _mark_ready(job)
+        job.transition(RenderJobState.STARTING)
+        job.transition(RenderJobState.RUNNING)
+        job.transition(RenderJobState.FINALIZING)
+        job.transition(RenderJobState.COMPLETED)
+        terminals.append(job)
+
+    # The active/queued attempts are older than several terminal jobs. Retention
+    # must prune old terminal history, never unfinished work.
+    store.save([running, queued, *terminals])
+    loaded = store.load()
+
+    assert running.attempt_id in {job.attempt_id for job in loaded}
+    assert queued.attempt_id in {job.attempt_id for job in loaded}
+    assert terminals[-1].attempt_id in {job.attempt_id for job in loaded}
+    assert len(loaded) == 3
+
+
+def test_queue_retention_can_exceed_limit_when_all_work_is_unfinished(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(queue_module, "MAX_HISTORY", 2)
+    store = RenderQueueStore(tmp_path / "queue.json")
+    queue = RenderQueue(store)
+
+    jobs = []
+    for index in range(3):
+        job = _job(tmp_path, f"pending-{index}")
+        _mark_ready(job)
+        queue.enqueue(job)
+        jobs.append(job)
+
+    assert len(queue.jobs) == 3
+    assert len(store.load()) == 3
+    assert {job.attempt_id for job in store.load()} == {
+        job.attempt_id for job in jobs
+    }
