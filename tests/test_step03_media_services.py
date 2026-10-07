@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import errno
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -7,8 +9,15 @@ import threading
 import time
 
 from full_album_maker.media_library_model import MediaStatus, MediaType, stable_asset_id
+import full_album_maker.media_library_services as media_services
 from full_album_maker.media_library_services import (
-    MediaSidecarStore, SidecarMigrationConflict, SidecarRecord, asset_from_item, collect_folder_paths,
+    MediaSidecarStore,
+    SidecarCorruptionError,
+    SidecarMigrationConflict,
+    SidecarRecord,
+    SidecarStoreError,
+    asset_from_item,
+    collect_folder_paths,
     media_type_for_path,
 )
 
@@ -377,3 +386,203 @@ def test_sidecar_migration_deduplicates_identical_destination_record(
     latest = MediaSidecarStore(project)
     assert "old-id" not in latest.records()
     assert latest.get("new-id") == record
+
+
+
+def test_corrupt_sidecar_is_quarantined_without_losing_original_bytes(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Corrupt.json"
+    project.write_text("{}", encoding="utf-8")
+    store = MediaSidecarStore(project)
+    target = store.path
+    assert target is not None
+    corrupt = b'{"version": 1, "records": '
+    target.write_bytes(corrupt)
+
+    assert store.load() == {}
+    assert "dikarantina" in store.last_recovery_warning
+    assert store.quarantined_path is not None
+    assert store.quarantined_path.read_bytes() == corrupt
+    assert not target.exists()
+    assert store.persistence_blocked is False
+
+    store.update("fresh", favorite=True)
+    assert target.is_file()
+    assert MediaSidecarStore(project).get("fresh").favorite is True
+    assert store.quarantined_path.read_bytes() == corrupt
+
+
+def test_unsupported_sidecar_version_is_preserved_and_blocks_writes(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Future.json"
+    project.write_text("{}", encoding="utf-8")
+    store = MediaSidecarStore(project)
+    target = store.path
+    assert target is not None
+    payload = {
+        "version": 999,
+        "records": {
+            "future": {
+                "favorite": True,
+                "tags": ["future"],
+                "description": "new schema",
+                "collections": [],
+                "imported_at": 1.0,
+            }
+        },
+    }
+    original = json.dumps(payload).encode("utf-8")
+    target.write_bytes(original)
+
+    assert store.load() == {}
+    assert store.persistence_blocked is True
+    assert "tidak didukung" in store.last_recovery_warning
+    assert target.read_bytes() == original
+    assert store.quarantined_path is None
+
+    try:
+        store.update("local", tags=("must-not-write",))
+    except SidecarStoreError:
+        pass
+    else:
+        raise AssertionError("Unsupported sidecar version harus memblok write")
+
+    assert target.read_bytes() == original
+
+
+def test_runtime_corruption_is_quarantined_and_retry_restores_last_good_memory(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "RuntimeCorrupt.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update(
+        "asset-a",
+        favorite=True,
+        tags=("keep",),
+        description="last-known-good",
+    )
+
+    store = MediaSidecarStore(project)
+    assert store.get("asset-a").description == "last-known-good"
+    target = store.path
+    assert target is not None
+
+    corrupt = b'{"version": 1, "records": {"asset-a": '
+    target.write_bytes(corrupt)
+
+    try:
+        store.update("asset-a", description="new-value")
+    except SidecarCorruptionError:
+        pass
+    else:
+        raise AssertionError("Corruption saat runtime harus gagal sebelum write")
+
+    assert store.quarantined_path is not None
+    assert store.quarantined_path.read_bytes() == corrupt
+    assert not target.exists()
+    assert store.get("asset-a").description == "last-known-good"
+
+    # Explicit retry after quarantine rebuilds a clean sidecar from the last
+    # known-good in-memory snapshot plus the new requested change.
+    store.update("asset-a", description="new-value")
+    latest = MediaSidecarStore(project).get("asset-a")
+    assert latest.favorite is True
+    assert latest.tags == ("keep",)
+    assert latest.description == "new-value"
+
+
+def test_sidecar_load_cleans_only_orphan_transaction_temp_files(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Temps.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset-a", favorite=True)
+    target = seed.path
+    assert target is not None
+
+    orphan = target.parent / f"{target.name}.deadbeef.tmp"
+    unrelated = target.parent / "unrelated.tmp"
+    orphan.write_bytes(b"partial-sidecar")
+    unrelated.write_bytes(b"keep")
+
+    loaded = MediaSidecarStore(project)
+    assert loaded.get("asset-a").favorite is True
+    assert not orphan.exists()
+    assert unrelated.read_bytes() == b"keep"
+
+
+def test_sidecar_replace_enospc_preserves_previous_file_and_cleans_temp(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "NoSpace.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset-a", tags=("old",))
+    target = seed.path
+    assert target is not None
+    original = target.read_bytes()
+
+    store = MediaSidecarStore(project)
+    assert store.get("asset-a").tags == ("old",)
+
+    def no_space(*args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(media_services.os, "replace", no_space)
+
+    try:
+        store.update("asset-a", tags=("new",))
+    except OSError as exc:
+        assert exc.errno == errno.ENOSPC
+    else:
+        raise AssertionError("ENOSPC harus menggagalkan sidecar publish")
+
+    assert target.read_bytes() == original
+    assert not list(target.parent.glob(f"{target.name}.*.tmp"))
+
+
+def test_failed_corrupt_sidecar_quarantine_blocks_persistence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "CannotQuarantine.json"
+    project.write_text("{}", encoding="utf-8")
+    store = MediaSidecarStore(project)
+    target = store.path
+    assert target is not None
+    corrupt = b'{"version":'
+    target.write_bytes(corrupt)
+
+    monkeypatch.setattr(
+        media_services.os,
+        "replace",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            PermissionError("replace blocked")
+        ),
+    )
+    monkeypatch.setattr(
+        media_services.shutil,
+        "copy2",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            PermissionError("copy blocked")
+        ),
+    )
+
+    assert store.load() == {}
+    assert store.persistence_blocked is True
+    assert "dinonaktifkan" in store.last_recovery_warning
+    assert target.read_bytes() == corrupt
+
+    try:
+        store.update("asset-a", favorite=True)
+    except SidecarStoreError:
+        pass
+    else:
+        raise AssertionError("Write harus diblok jika corruption tidak bisa diamankan")
+
+    assert target.read_bytes() == corrupt

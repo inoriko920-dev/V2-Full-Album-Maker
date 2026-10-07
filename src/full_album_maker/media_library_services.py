@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import threading
 import time
 from typing import Any, Iterable, Iterator, Mapping
+from uuid import uuid4
 
 from .media_library_model import (
     MediaAsset, MediaMetadata, MediaStatus, MediaType, normalize_tags, stable_asset_id,
@@ -104,21 +107,96 @@ def _sidecar_file_lock(target: Path) -> Iterator[None]:
         handle.close()
 
 
+class SidecarStoreError(OSError):
+    """Base error for media sidecar persistence failures."""
+
+
+class SidecarCorruptionError(SidecarStoreError):
+    """Raised when an existing sidecar cannot be trusted or parsed safely."""
+
+
+class SidecarUnsupportedVersion(SidecarStoreError):
+    """Raised when a newer/unknown sidecar schema must not be overwritten."""
+
+
+def _validate_sidecar_record(asset_id: object, value: object) -> None:
+    if not isinstance(asset_id, str) or not asset_id:
+        raise SidecarCorruptionError("ID asset sidecar tidak valid.")
+    if not isinstance(value, dict):
+        raise SidecarCorruptionError(
+            f"Record sidecar {asset_id!r} bukan object JSON."
+        )
+    if "favorite" in value and not isinstance(value["favorite"], bool):
+        raise SidecarCorruptionError(
+            f"Field favorite record {asset_id!r} tidak valid."
+        )
+    for name in ("tags", "collections"):
+        if name not in value:
+            continue
+        raw = value[name]
+        if (
+            not isinstance(raw, list)
+            or not all(isinstance(item, str) for item in raw)
+        ):
+            raise SidecarCorruptionError(
+                f"Field {name} record {asset_id!r} tidak valid."
+            )
+    if "description" in value and not isinstance(value["description"], str):
+        raise SidecarCorruptionError(
+            f"Field description record {asset_id!r} tidak valid."
+        )
+    if "imported_at" in value:
+        raw = value["imported_at"]
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise SidecarCorruptionError(
+                f"Field imported_at record {asset_id!r} tidak valid."
+            )
+
+
 def _read_sidecar_records(target: Path, version: int) -> dict[str, "SidecarRecord"]:
+    if not target.exists():
+        return {}
     try:
-        raw = json.loads(target.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
+        text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
-    if not isinstance(raw, dict) or raw.get("version") != version:
-        return {}
+    except (OSError, UnicodeError) as exc:
+        raise SidecarCorruptionError(
+            f"Sidecar metadata tidak dapat dibaca: {exc}"
+        ) from exc
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SidecarCorruptionError(
+            f"Sidecar metadata JSON rusak: {exc}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise SidecarCorruptionError("Root sidecar metadata bukan object JSON.")
+    found_version = raw.get("version")
+    if found_version != version:
+        raise SidecarUnsupportedVersion(
+            f"Versi sidecar metadata tidak didukung: {found_version!r} "
+            f"(aplikasi mendukung {version})."
+        )
     records = raw.get("records")
     if not isinstance(records, dict):
-        return {}
+        raise SidecarCorruptionError("Field records sidecar metadata tidak valid.")
     clean: dict[str, SidecarRecord] = {}
     for asset_id, value in records.items():
-        if isinstance(asset_id, str) and isinstance(value, dict):
-            clean[asset_id] = SidecarRecord.from_mapping(value)
+        _validate_sidecar_record(asset_id, value)
+        clean[asset_id] = SidecarRecord.from_mapping(value)
     return clean
+
+
+def _cleanup_sidecar_temps(target: Path) -> int:
+    removed = 0
+    for candidate in target.parent.glob(f"{target.name}.*.tmp"):
+        try:
+            candidate.unlink(missing_ok=True)
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def _write_sidecar_records(
@@ -194,7 +272,7 @@ class SidecarRecord:
 
 
 class MediaSidecarStore:
-    """Per-project media metadata with merge-safe cross-process persistence."""
+    """Per-project media metadata with merge-safe, corruption-safe persistence."""
 
     VERSION = 1
 
@@ -204,12 +282,93 @@ class MediaSidecarStore:
         self._loaded = False
         self._dirty_records: set[str] = set()
         self._pending_migrations: list[tuple[str, str]] = []
+        self.last_recovery_warning = ""
+        self.quarantined_path: Path | None = None
+        self.persistence_blocked = False
 
     @property
     def path(self) -> Path | None:
         if self.project_path is None:
             return None
         return self.project_path.with_suffix(self.project_path.suffix + ".media.json")
+
+    def _quarantine_corrupt_store(
+        self,
+        target: Path,
+        reason: Exception,
+    ) -> Path | None:
+        if not target.exists():
+            self.last_recovery_warning = (
+                "Metadata media tidak dapat dibaca, tetapi file sidecar sudah "
+                "tidak ada. Metadata dibuka kosong."
+            )
+            return None
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        quarantine = target.with_name(
+            f"{target.stem}.corrupt-{timestamp}-{uuid4().hex[:8]}{target.suffix}"
+        )
+        try:
+            os.replace(target, quarantine)
+        except OSError:
+            try:
+                shutil.copy2(target, quarantine)
+            except OSError as backup_exc:
+                self.persistence_blocked = True
+                self.last_recovery_warning = (
+                    "Metadata media rusak dan tidak dapat dikarantina. "
+                    "Persistence metadata dinonaktifkan agar file asli tidak "
+                    f"tertimpa ({backup_exc})."
+                )
+                return None
+            try:
+                target.unlink(missing_ok=True)
+            except OSError:
+                self.persistence_blocked = True
+                self.last_recovery_warning = (
+                    "Metadata media rusak berhasil disalin ke karantina, tetapi "
+                    "file asli tidak dapat dipindahkan/dihapus. Persistence "
+                    "dinonaktifkan agar bukti asli tidak tertimpa."
+                )
+                self.quarantined_path = quarantine
+                return quarantine
+
+        self.quarantined_path = quarantine
+        self.last_recovery_warning = (
+            "Metadata media rusak telah dikarantina sebagai "
+            f"{quarantine.name}. Aplikasi memakai metadata kosong/terakhir yang "
+            "masih ada di memori; file karantina dipertahankan untuk recovery."
+        )
+        return quarantine
+
+    def _unsupported_version(self, target: Path, exc: Exception) -> None:
+        self.persistence_blocked = True
+        self.last_recovery_warning = (
+            "Versi metadata media pada disk tidak didukung oleh aplikasi ini. "
+            "File asli dipertahankan dan persistence metadata dinonaktifkan agar "
+            f"format yang lebih baru tidak tertimpa ({exc})."
+        )
+
+    def _read_latest_for_write(self, target: Path) -> dict[str, SidecarRecord]:
+        if self.persistence_blocked:
+            raise SidecarStoreError(
+                self.last_recovery_warning
+                or "Persistence metadata media sedang dinonaktifkan."
+            )
+        try:
+            return _read_sidecar_records(target, self.VERSION)
+        except SidecarUnsupportedVersion as exc:
+            self._unsupported_version(target, exc)
+            raise
+        except SidecarCorruptionError as exc:
+            self._quarantine_corrupt_store(target, exc)
+            # Preserve every last-known-good local record for an explicit retry.
+            self._dirty_records.update(self._records)
+            raise SidecarCorruptionError(
+                "Metadata media di disk rusak dan sudah diamankan ke karantina. "
+                "Perubahan saat ini belum disimpan; coba simpan lagi untuk "
+                "membuat sidecar baru dari metadata terakhir yang masih valid."
+            ) from exc
 
     def load(self) -> dict[str, SidecarRecord]:
         if self._loaded:
@@ -218,7 +377,16 @@ class MediaSidecarStore:
         target = self.path
         if target is None:
             return {}
-        self._records = _read_sidecar_records(target, self.VERSION)
+        with _sidecar_file_lock(target):
+            _cleanup_sidecar_temps(target)
+            try:
+                self._records = _read_sidecar_records(target, self.VERSION)
+            except SidecarUnsupportedVersion as exc:
+                self._unsupported_version(target, exc)
+                self._records = {}
+            except SidecarCorruptionError as exc:
+                self._quarantine_corrupt_store(target, exc)
+                self._records = {}
         self._clear_local_pending()
         return dict(self._records)
 
@@ -228,7 +396,6 @@ class MediaSidecarStore:
         return self._records.get(str(asset_id), SidecarRecord())
 
     def records(self) -> dict[str, SidecarRecord]:
-        """Return current local view, including unpersisted records."""
         if not self._loaded:
             self.load()
         return dict(self._records)
@@ -275,10 +442,11 @@ class MediaSidecarStore:
             return
         with _sidecar_file_lock(target):
             latest = self._apply_local_pending(
-                _read_sidecar_records(target, self.VERSION)
+                self._read_latest_for_write(target)
             )
             latest[asset_id] = record
             _write_sidecar_records(target, self.VERSION, latest)
+            _cleanup_sidecar_temps(target)
         self._records = latest
         self._loaded = True
         self._clear_local_pending()
@@ -309,7 +477,7 @@ class MediaSidecarStore:
         if persist and target is not None:
             with _sidecar_file_lock(target):
                 latest = self._apply_local_pending(
-                    _read_sidecar_records(target, self.VERSION)
+                    self._read_latest_for_write(target)
                 )
                 current = latest.get(key, SidecarRecord())
                 record = SidecarRecord(
@@ -321,6 +489,7 @@ class MediaSidecarStore:
                 )
                 latest[key] = record
                 _write_sidecar_records(target, self.VERSION, latest)
+                _cleanup_sidecar_temps(target)
             self._records = latest
             self._loaded = True
             self._clear_local_pending()
@@ -347,10 +516,11 @@ class MediaSidecarStore:
         if persist and target is not None:
             with _sidecar_file_lock(target):
                 latest = self._apply_local_pending(
-                    _read_sidecar_records(target, self.VERSION)
+                    self._read_latest_for_write(target)
                 )
                 self._apply_one_migration(latest, old_id, new_id)
                 _write_sidecar_records(target, self.VERSION, latest)
+                _cleanup_sidecar_temps(target)
             self._records = latest
             self._loaded = True
             self._clear_local_pending()
@@ -379,14 +549,6 @@ class MediaSidecarStore:
         carry_current: bool = True,
         persist: bool = True,
     ) -> bool:
-        """Move this store to a new project path without losing local metadata.
-
-        First-save and Save As keep the same in-memory project object, so media
-        metadata must follow to the new <project>.media.json. Opening a different
-        project should instead construct/load a fresh store and pass
-        carry_current=False at the caller boundary.
-        """
-
         new_path = Path(project_path).expanduser() if project_path else None
         old_path = self.project_path
         if old_path == new_path:
@@ -399,6 +561,9 @@ class MediaSidecarStore:
         current_migrations = list(self._pending_migrations)
 
         self.project_path = new_path
+        self.last_recovery_warning = ""
+        self.quarantined_path = None
+        self.persistence_blocked = False
         if not carry_current:
             self._records = {}
             self._loaded = False
@@ -406,10 +571,6 @@ class MediaSidecarStore:
             self.load()
             return True
 
-        # The current project snapshot is authoritative for records it already
-        # knows about. Mark every carried record dirty so save() merges it into
-        # any destination-sidecar records written by another process rather than
-        # replacing the whole destination snapshot.
         self._records = current_records
         self._loaded = True
         self._dirty_records = set(current_records)
@@ -428,16 +589,15 @@ class MediaSidecarStore:
 
         with _sidecar_file_lock(target):
             latest = self._apply_local_pending(
-                _read_sidecar_records(target, self.VERSION)
+                self._read_latest_for_write(target)
             )
             _write_sidecar_records(target, self.VERSION, latest)
+            _cleanup_sidecar_temps(target)
 
         self._records = latest
         self._loaded = True
-        self._dirty_records.clear()
-        self._pending_migrations.clear()
+        self._clear_local_pending()
         return True
-
 
 def _safe_stat(path: Path) -> tuple[MediaStatus, int | None, float | None, float]:
     try:

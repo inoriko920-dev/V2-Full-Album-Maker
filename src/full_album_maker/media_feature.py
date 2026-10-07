@@ -20,7 +20,7 @@ def _kind_items(w,kind):
 def _existing(w): return {canonical_path_key(a.path) for a in build_project_assets(w.project,visual_mod.images(w.project),None)}
 
 def _init(self,*a,**kw):
-    _originals['init'](self,*a,**kw); self._s03_cancel=threading.Event(); self._s03_jobs=0; self._s03_relink_generation={}; self._s03_project=self.project; self._s03_store=MediaSidecarStore(self._foundation_project_path or None); self._s03_index=MediaLibraryIndex(); self._s03_bridge=_Bridge(); self._s03_bridge.progress.connect(self._s03_progress); self._s03_bridge.imported.connect(self._s03_imported); self._s03_bridge.relinked.connect(self._s03_relinked)
+    _originals['init'](self,*a,**kw); self._s03_cancel=threading.Event(); self._s03_jobs=0; self._s03_relink_generation={}; self._s03_sidecar_warning_key=None; self._s03_project=self.project; self._s03_store=MediaSidecarStore(self._foundation_project_path or None); self._s03_index=MediaLibraryIndex(); self._s03_bridge=_Bridge(); self._s03_bridge.progress.connect(self._s03_progress); self._s03_bridge.imported.connect(self._s03_imported); self._s03_bridge.relinked.connect(self._s03_relinked)
     self.media_workspace=MediaWorkspace()
     lay=self.foundation_shell.context.layout(); self._s03_context_old=[lay.itemAt(i).widget() for i in range(lay.count()) if lay.itemAt(i).widget()]; self.media_context=MediaContextWidget(); self.media_context.hide(); lay.addWidget(self.media_context,1)
     self.media_inspector=MediaInspectorWidget(); self._inspector_router.addWidget(self.media_inspector)
@@ -60,11 +60,23 @@ def _refresh_media(self,reset=False):
         # Same in-memory project gaining/changing its canonical path means
         # First Save / Save As, not Open Project. Carry media metadata to the
         # new sidecar and merge against any destination records.
-        self._s03_store.rebind_project_path(
-            self._foundation_project_path or None,
-            carry_current=True,
-            persist=bool(self._foundation_project_path),
-        )
+        try:
+            self._s03_store.rebind_project_path(
+                self._foundation_project_path or None,
+                carry_current=True,
+                persist=bool(self._foundation_project_path),
+            )
+        except OSError as exc:
+            # Project Save/Save As remains authoritative even when auxiliary
+            # media metadata persistence is temporarily unavailable. Keep the
+            # current sidecar records dirty/in-memory and surface the problem.
+            self.log.appendPlainText(
+                f"Metadata Media belum dapat disimpan setelah perubahan path: {exc}"
+            )
+            if hasattr(self,'foundation_state'):
+                self.foundation_state.set_status(
+                    save=('Metadata media belum tersimpan','warning')
+                )
     elif reset and path is not None:
         # Explicit refresh of the same saved project should see the latest
         # sidecar written by another process. Unsaved projects keep their
@@ -72,6 +84,13 @@ def _refresh_media(self,reset=False):
         self._s03_store=MediaSidecarStore(self._foundation_project_path)
         self._s03_store.load()
     self._s03_project=self.project
+    sidecar_warning=str(getattr(self._s03_store,'last_recovery_warning','') or '')
+    sidecar_warning_key=(str(getattr(self._s03_store,'path',None) or ''),sidecar_warning)
+    if sidecar_warning and sidecar_warning_key!=getattr(self,'_s03_sidecar_warning_key',None):
+        self._s03_sidecar_warning_key=sidecar_warning_key
+        self.log.appendPlainText('Metadata Media: '+sidecar_warning)
+        if hasattr(self,'foundation_state'):
+            self.foundation_state.set_status(save=('Metadata media perlu perhatian','warning'))
     self._s03_index.replace_all(build_project_assets(self.project,visual_mod.images(self.project),self._s03_store)); self.media_workspace.set_index(self._s03_index); self.media_context.set_counts(self._s03_index.counts()); cc={}
     for asset in self._s03_index.all():
         for name in asset.collections: cc[name]=cc.get(name,0)+1
