@@ -1,0 +1,12 @@
+V2 Full-Album-Maker — STEP 01 artifact integrity
+
+STEP 01 Gate: PASS
+Coding status: BLOCKED
+
+STEP 01 DOCX:
+ab3b0f8293257f581edadf26f105d341019ca912185d2b109f38a59274995f58  STEP_01_AUDIT_REPO_LAMA_DAN_KONTRAK_PERILAKU.docx
+Size: 54425 bytes
+Visual QA: PASS, 13/13 rendered pages inspected after final table-layout patch.
+
+Audited V2 baseline:
+e3bc35b024654271cd594703f1402f9b003b1b08
