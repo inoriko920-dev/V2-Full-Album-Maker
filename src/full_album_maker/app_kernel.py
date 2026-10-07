@@ -54,8 +54,9 @@ class LegacyRuntimeAdapter:
 class AppKernel:
     """Application kernel with one central task-lifecycle owner.
 
-    M2 only wires TaskSupervisor ownership. No existing worker/service is routed
-    through it yet; that happens gradually after owner-specific characterization.
+    M2 wires TaskSupervisor ownership, M3 ProjectPersistence, and M4 the
+    RenderEngine facade. Legacy implementations remain adapters until their
+    individual parity gates permit retirement.
     """
 
     runtime: LegacyRuntimeAdapter
@@ -88,10 +89,10 @@ class AppKernel:
 class CompositionRoot:
     """Single M1 launch-time wiring location for V2.
 
-    M1 bound the proven runtime entrypoints. M2 adds one TaskSupervisor owned by
-    the kernel without rerouting legacy workers yet. Future boundaries such as
-    ProjectPersistence, RenderEngine, and WorkspaceRegistry remain deferred to
-    their approved migration slices.
+    M1 bound the proven runtime entrypoints. M2 added TaskSupervisor, M3 added
+    ProjectPersistence, and M4 adds the RenderEngine facade while preserving the
+    proven STEP10 executor/compiler implementation. Later boundaries such as
+    PreviewEngine/CacheManager and WorkspaceRegistry remain deferred.
     """
 
     def __init__(
