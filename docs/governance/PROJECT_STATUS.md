@@ -4,7 +4,7 @@
 PLANNING
 
 ## Current STEP
-STEP 04 — Hardening Stabilitas, Lifecycle, Error Handling, dan Recovery
+STEP 05 — Media, Preview, Cache, Timeline, dan Project Data
 
 ## Gate Status
 - STEP 00: PASS
@@ -12,45 +12,35 @@ STEP 04 — Hardening Stabilitas, Lifecycle, Error Handling, dan Recovery
 - STEP 02: PASS
 - STEP 03: PASS
 - STEP 04: PASS
+- STEP 05: PASS
 
-## STEP 04 Final Hardening Direction
-- Task/process lifecycle uses explicit CREATED -> QUEUED -> STARTING -> RUNNING -> COMPLETING/CANCELLING -> terminal states.
-- New async work must carry TaskToken identity with owner scope, project token, project generation, and request generation.
-- TaskSupervisor/TaskScope owns asynchronous job lifecycle.
-- ProcessSupervisor owns subprocess spawn, pipe draining, cancellation, terminate/kill escalation, wait/reap, and shutdown.
-- ApplicationLifecycleService owns deterministic app close ordering.
-- Project switch is transactional from the user's perspective; stale old-project completions become no-op.
-- Canonical Save remains immutable snapshot -> stage -> semantic verification -> atomic publish.
-- Autosave/recovery remains separate from canonical Save.
-- Recovery candidates must be classified explicitly as CORRUPT / STALE / SAME / NEWER / FOREIGN.
-- Render bundle recovery retains versioned transaction journals and rollback/cleanup semantics.
-- Cache corruption degrades to MISS/regenerate and never becomes project corruption.
-- AI/network failure never blocks manual editing, save, preview, or render.
-- Stable project token + generation is the target stale-result guard, replacing object identity checks over time.
-- Diagnostics/logs use one cross-service sanitization policy.
-- Shutdown waits are bounded; no project mutation is allowed after session/app generation is invalid.
-- Failure-injection evidence is mandatory before replacing existing lifecycle/safety code.
-
-## Current Lifecycle Gaps to Track
-- Legacy render and STEP10 render currently have separate cancellation implementations.
-- RenderAsyncBridge shutdown is non-blocking and can wind down after UI disposal.
-- MediaPreviewCache uses daemon worker threads without an explicit close method in the audited baseline.
-- AI and Spectrum preview already have generation invalidation but use service-specific executor shutdown behavior.
-- Media import guards stale results using project object identity rather than target project token/generation.
-- Recovery discovery safely ignores invalid files but does not yet expose typed corrupt/stale classification.
-- Multiple incremental closeEvent layers make shutdown ordering implicit.
-
-These are planning risks, not claims that every current run leaks a process.
+## STEP 05 Final Data/Media Direction
+- ProjectDocument MediaAsset `asset_id` UUID is the sole canonical media identity.
+- File location (`locator` / `relative_path`) and source fingerprint are separate from domain identity.
+- Relink preserves asset UUID and all song/layer/project references.
+- ffprobe remains the initial canonical adapter behind MediaProbeService.
+- Import workers prepare proposals; project mutations commit through controlled EditorController/application transactions.
+- Accurate Preview remains the parity oracle for project composition.
+- Preview work is generation-aware, coalesced/cancellable, and off the UI thread.
+- Cache is disposable, versioned, namespaced, fingerprint-aware, quota-bounded, and never project truth.
+- Timeline remains time-based with TIMEBASE=240000 integer ticks per second.
+- Packed / Free / gap / crossfade semantics remain frozen.
+- Source VFR is media metadata/timestamp behavior, not a new project timeline clock.
+- ProjectDocument schema_version=2 remains frozen during initial V2 consolidation.
+- Extensions must be namespaced/versioned, JSON-only, validated, and technology-neutral.
+- Project migration is deterministic and yields one current-schema ProjectDocument or a typed failure.
+- Save/reopen correctness is normalized semantic equality, not byte-for-byte JSON formatting.
+- Missing media does not make the project corrupt; references remain available for relink and dependent render operations block only when required.
 
 ## Coding Status
 BLOCKED — planning phase.
 
-No STEP 04 source-code, dependency, UI, schema, renderer, workflow, or project-format implementation change was made.
+No STEP 05 source-code, dependency, UI, schema, renderer, workflow, or project-format implementation change was made.
 
 ## Next STEP
-STEP 05 — Media, Preview, Cache, Timeline, dan Project Data.
+STEP 06 — Render Engine, Processing Pipeline, dan Long-Album Reliability.
 
-STEP 05 must design source identity/fingerprints, media probing, relink, preview request/result contracts, cache namespaces/quotas/invalidation, integer-tick timeline behavior, project-data compatibility, and migration/testing constraints using STEP 04 lifecycle/failure contracts.
+STEP 06 must design canonical render request/snapshot/compiler/process/preflight/verification/publication boundaries, long-album resource behavior, retry/resume policy, Windows command/filter-graph limits, and parity with Accurate Preview while preserving STEP 01–05 contracts.
 
 ## Canonical References
 - Master planning DOCX.
@@ -59,10 +49,12 @@ STEP 05 must design source identity/fingerprints, media probing, relink, preview
 - STEP 02 DOCX.
 - STEP 03 DOCX.
 - STEP 04 DOCX.
-- docs/planning/STEP_01_AUDIT_SUMMARY.md
-- docs/planning/STEP_02_DECISIONS.md
-- docs/planning/STEP_03_ARCHITECTURE_DECISIONS.md
-- docs/planning/STEP_04_HARDENING_DECISIONS.md
-- docs/planning/STEP_04_ARTIFACT_INTEGRITY.txt
-- docs/governance/PROJECT_GOVERNANCE.md
-- docs/governance/AI_HANDOFF.md
+- STEP 05 DOCX.
+- `docs/planning/STEP_01_AUDIT_SUMMARY.md`
+- `docs/planning/STEP_02_DECISIONS.md`
+- `docs/planning/STEP_03_ARCHITECTURE_DECISIONS.md`
+- `docs/planning/STEP_04_HARDENING_DECISIONS.md`
+- `docs/planning/STEP_05_MEDIA_TIMELINE_PROJECT_DATA_DECISIONS.md`
+- `docs/planning/STEP_05_ARTIFACT_INTEGRITY.txt`
+- `docs/governance/PROJECT_GOVERNANCE.md`
+- `docs/governance/AI_HANDOFF.md`
