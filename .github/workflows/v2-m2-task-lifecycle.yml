@@ -44,25 +44,19 @@ jobs:
           python -m pip install -e .
 
       - name: Q0 compile
-        run: |
-          python -m compileall -q             src             tests/test_v2_feature_parity_registry.py             tests/test_v2_app_kernel.py             tests/test_v2_task_lifecycle.py
+        run: python -m compileall -q src tests/test_v2_feature_parity_registry.py tests/test_v2_app_kernel.py tests/test_v2_task_lifecycle.py
 
       - name: Q0 M0 + M1 + M2 contracts
-        run: |
-          python -m pytest -q             tests/test_v2_feature_parity_registry.py             tests/test_v2_app_kernel.py             tests/test_v2_task_lifecycle.py             tests/test_editor_v2_main_entrypoint.py
+        run: python -m pytest -q tests/test_v2_feature_parity_registry.py tests/test_v2_app_kernel.py tests/test_v2_task_lifecycle.py tests/test_editor_v2_main_entrypoint.py
 
       - name: Q1 legacy async stale guards
-        run: |
-          python -m pytest -q             tests/test_async_import.py::test_finished_import_is_discarded_if_project_changed             tests/test_step09_async_provider.py::test_newer_provider_result_wins_and_stale_completion_is_discarded             tests/test_step09_async_provider.py::test_cancel_invalidates_inflight_result_without_emitting_failure
+        run: python -m pytest -q tests/test_async_import.py tests/test_step09_async_provider.py::test_newer_provider_result_wins_and_stale_completion_is_discarded tests/test_step09_async_provider.py::test_cancel_invalidates_inflight_result_without_emitting_failure
 
       - name: Q1 render and close lifecycle characterization
-        run: |
-          python -m pytest -q             tests/test_render_lifecycle.py::test_pending_cancel_is_seen_before_renderer_starts_work             tests/test_render_lifecycle.py::test_close_during_render_requests_cancel_and_defers_close             tests/test_step11_close_lifecycle.py::test_step11_close_cancel_keeps_window_open_without_legacy_prompt
+        run: python -m pytest -q tests/test_render_lifecycle.py::test_pending_cancel_is_seen_before_renderer_starts_work tests/test_render_lifecycle.py::test_close_during_render_requests_cancel_and_defers_close tests/test_step11_close_lifecycle.py::test_step11_close_cancel_keeps_window_open_without_legacy_prompt
 
       - name: Q1 nine-workspace launch characterization
-        run: |
-          python -m pytest -q             tests/test_step11_e2e.py::test_nine_workspace_navigation_is_read_only_in_production_subprocess
+        run: python -m pytest -q tests/test_step11_e2e.py::test_nine_workspace_navigation_is_read_only_in_production_subprocess
 
       - name: Q1 authoritative-state production shell
-        run: |
-          python -m pytest -q             tests/test_step11_production_integration.py::test_step11_production_shell_uses_one_state_and_canonical_save
+        run: python -m pytest -q tests/test_step11_production_integration.py::test_step11_production_shell_uses_one_state_and_canonical_save
