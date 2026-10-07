@@ -68,6 +68,9 @@ def test_supervisor_returns_current_completed_result_and_releases_bookkeeping() 
 
     report = supervisor.close(timeout=0.2)
     assert report.timed_out is False
+    assert report.submitted == 1
+    assert report.completed == 1
+    assert report.unfinished == 0
 
 
 def test_stale_result_is_rejected_after_scope_invalidation() -> None:
@@ -136,6 +139,8 @@ def test_close_is_bounded_and_reports_noncooperative_worker() -> None:
     elapsed = monotonic() - before
 
     assert report.timed_out is True
+    assert report.submitted == 1
+    assert report.completed == 0
     assert report.unfinished == 1
     assert elapsed < 0.5
     assert supervisor.closed is True
