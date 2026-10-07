@@ -292,6 +292,37 @@ def add_progress_protocol(args: tuple[str, ...]) -> tuple[str, ...]:
 
 
 class Step10ProcessRunner:
+    @staticmethod
+    def _terminate_process(
+        process: subprocess.Popen,
+        *,
+        graceful_timeout: float = 3.0,
+    ) -> None:
+        """Stop FFmpeg deterministically: terminate first, then kill on timeout."""
+        try:
+            if process.poll() is not None:
+                return
+            process.terminate()
+        except Exception:
+            # A concurrent waiter may already have reaped the process.
+            if process.poll() is not None:
+                return
+        try:
+            process.wait(timeout=max(0.1, float(graceful_timeout)))
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            if process.poll() is None:
+                process.kill()
+        finally:
+            try:
+                process.wait(timeout=max(0.1, float(graceful_timeout)))
+            except subprocess.TimeoutExpired:
+                # This should be exceptionally rare. The outer finally still
+                # performs one last best-effort kill/wait before returning.
+                pass
+
     def run(
         self,
         args: tuple[str, ...],
@@ -301,6 +332,9 @@ class Step10ProcessRunner:
         on_metrics: MetricCallback | None = None,
         on_log: LogCallback | None = None,
     ) -> RenderMetrics:
+        if cancel_event is not None and cancel_event.is_set():
+            raise Step10RenderCancelled("Render dibatalkan sebelum FFmpeg dimulai.")
+
         process = subprocess.Popen(
             list(args),
             stdout=subprocess.PIPE,
@@ -313,6 +347,15 @@ class Step10ProcessRunner:
         if process.stdout is None or process.stderr is None:
             process.kill()
             raise Step10RenderError("FFmpeg process pipe tidak tersedia.")
+
+        terminate_lock = threading.Lock()
+
+        def stop_process(*, graceful_timeout: float = 3.0) -> None:
+            with terminate_lock:
+                self._terminate_process(
+                    process,
+                    graceful_timeout=graceful_timeout,
+                )
 
         stderr_lines: list[str] = []
         stderr_lock = threading.Lock()
@@ -332,17 +375,37 @@ class Step10ProcessRunner:
             target=drain_stderr, name="fam-render-stderr", daemon=True
         )
         thread.start()
+
+        cancel_watch_stop = threading.Event()
+        cancelled_by_watchdog = threading.Event()
+
+        def watch_cancel() -> None:
+            if cancel_event is None:
+                return
+            while not cancel_watch_stop.is_set():
+                if not cancel_event.wait(timeout=0.1):
+                    continue
+                if cancel_watch_stop.is_set():
+                    return
+                cancelled_by_watchdog.set()
+                stop_process()
+                return
+
+        cancel_thread: threading.Thread | None = None
+        if cancel_event is not None:
+            cancel_thread = threading.Thread(
+                target=watch_cancel,
+                name="fam-render-cancel-watchdog",
+                daemon=True,
+            )
+            cancel_thread.start()
+
         values: dict[str, str] = {}
         last = RenderMetrics()
         try:
             for raw in process.stdout:
                 if cancel_event is not None and cancel_event.is_set():
-                    process.terminate()
-                    try:
-                        process.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=3)
+                    stop_process()
                     raise Step10RenderCancelled("Render dibatalkan oleh pengguna.")
                 line = sanitize_render_log(raw)
                 if "=" not in line:
@@ -398,7 +461,10 @@ class Step10ProcessRunner:
 
             return_code = process.wait()
             thread.join(timeout=1.0)
-            if cancel_event is not None and cancel_event.is_set():
+            if (
+                cancelled_by_watchdog.is_set()
+                or (cancel_event is not None and cancel_event.is_set())
+            ):
                 raise Step10RenderCancelled("Render dibatalkan oleh pengguna.")
             if return_code != 0:
                 with stderr_lock:
@@ -409,9 +475,16 @@ class Step10ProcessRunner:
                 )
             return last
         finally:
+            cancel_watch_stop.set()
             if process.poll() is None:
-                process.kill()
-                process.wait()
+                stop_process(graceful_timeout=1.0)
+                if process.poll() is None:
+                    try:
+                        process.kill()
+                    finally:
+                        process.wait()
+            if cancel_thread is not None:
+                cancel_thread.join(timeout=1.0)
             thread.join(timeout=1.0)
 
 
