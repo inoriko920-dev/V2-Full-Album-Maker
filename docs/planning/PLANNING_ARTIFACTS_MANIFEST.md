@@ -1,6 +1,6 @@
 # Canonical Planning Artifacts Manifest — V2 Full-Album-Maker
 
-Status: planning STEP00–11 COMPLETE. Coding remains BLOCKED until the binary DOCX files listed below are physically present in the V2 repository and verified against these hashes.
+Status: planning STEP00–11 COMPLETE. **PRE-CODING DOCUMENTATION GATE: PASS.** The canonical binary DOCX files are physically present under `docs/planning/source-of-truth/` and their Git blob identities were verified against the exact local bytes whose SHA-256 values are listed below.
 
 | ID | Canonical file | SHA-256 |
 |---|---|---|
@@ -24,5 +24,13 @@ Status: planning STEP00–11 COMPLETE. Coding remains BLOCKED until the binary D
 - Markdown summaries do not replace the DOCX files.
 - Any changed DOCX requires a new hash and manifest update before implementation continues.
 
-## Repository Presence Gate
-Current manifest records expected bytes/hashes, but implementation remains BLOCKED until the binary DOCX artifacts themselves are stored in the V2 repository and verified.
+## Repository Presence Gate — PASS
+- Canonical binary commit: `19de01219fbfd6aa1662785b298649c67a682da2`.
+- Repository path: `docs/planning/source-of-truth/`.
+- Presence: 13/13 canonical DOCX files.
+- Git blob identity: 13/13 match the exact local canonical bytes.
+- SHA-256: local canonical bytes match this manifest 13/13.
+- Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx`: absent.
+- Detailed verification: `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
+
+The documentation hard block is cleared. Implementation is **ready but not yet started**; first work is M0/T1 FeatureParityRegistry + characterization.
