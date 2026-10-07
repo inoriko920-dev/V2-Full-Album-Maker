@@ -14,9 +14,10 @@ Before doing any work:
 10. Preserve STEP 07 animation/Spectrum/parity decisions D07-01..D07-18.
 11. Preserve STEP 08 feature/AI decisions D08-01..D08-20.
 12. Preserve STEP 09 UI decisions D09-01..D09-20.
-13. Do not skip planning gates or redesign UI/workflow merely because another architecture looks cleaner.
-14. Every future implementation must remain reversible and test-protected.
-15. If a required architecture decision is not covered by approved planning, stop and document it first.
+13. Preserve STEP 10 quality decisions D10-01..D10-20.
+14. Do not skip planning gates or redesign UI/workflow merely because another architecture looks cleaner.
+15. Every future implementation must remain reversible and test-protected.
+16. If a required architecture decision is not covered by approved planning, stop and document it first.
 
 ## Frozen Architecture Facts
 - ProjectDocument + EditorController/EditorSession remain authoritative.
@@ -70,7 +71,7 @@ AppKernel / CompositionRoot; ProjectSession; WorkspaceRegistry; TaskSupervisor /
 - Beat-derived input never retimes master audio.
 
 ## STEP 07 Animation / Spectrum Rules
-- Existing FFmpeg Spectrum styles remain canonical; do not replace them with fake beat animation.
+- Existing FFmpeg Spectrum styles remain canonical.
 - Use versioned `Layer.animation` for generic keyframes; project schema remains v2.
 - Animation property targets come only from a validated registry.
 - Keyframe timing uses integer project ticks.
@@ -78,48 +79,58 @@ AppKernel / CompositionRoot; ProjectSession; WorkspaceRegistry; TaskSupervisor /
 - BeatAnalysis is derived data; BeatResponse is authored behavior.
 - Visual transitions remain separate from audio crossfade.
 - Existing overlay effects remain deterministic/seeded/bounded.
-- Generic authored animation wins only for the property explicitly authored; otherwise legacy behavior remains.
-- If beat analysis is unavailable, use a neutral/non-reactive fallback; never fake reactivity.
-- Every new effect family requires Accurate Preview vs Final Render golden evidence.
-- Animation complexity must not expand per-frame Python data for long albums.
+- Generic authored animation wins only for the property explicitly authored.
+- Missing beat analysis uses neutral/non-reactive fallback; never fake reactivity.
+- New effect families require Accurate Preview vs Final Render golden evidence.
+- Animation complexity cannot expand per-frame Python data for long albums.
 - Presets are declarative/versioned/non-executable.
-- Initial implementation proves a small core before expanding the catalog.
 
 ## STEP 08 Feature / AI Rules
 - All user-facing baseline features default to MUST KEEP.
-- No user-facing removal is authorized by this planning set.
-- Manual editor remains the feature authority; AI coverage may safely lag behind.
+- No user-facing removal is authorized.
+- Manual editor remains feature authority.
 - AI provider plans only; local ActionRegistry + dry-run + EditorController own mutation.
-- Agent context is bounded, stable-ID based, and excludes paths/API keys/locator/vault data.
-- Ambiguity or insufficient context means clarification + zero mutation.
-- Any project/revision/context/permission incompatibility invalidates the plan; no auto-rebase.
-- Preview Diff and Execute use exactly the same resolvers/commands.
+- Agent context is bounded/stable-ID based and excludes paths/API keys.
+- Ambiguity means clarification + zero mutation.
+- Project/revision/context/permission mismatch invalidates plan; no auto-rebase.
+- Preview Diff and Execute use the same resolver/commands.
 - One plan commits as one revision and one Undo transaction.
-- AI direct render and AI filesystem path selection remain deferred.
+- AI direct render and filesystem path selection remain deferred.
 
 ## STEP 09 UI Rules
-- Preserve the existing production UI/workflow; no redesign is authorized.
-- Keep all 9 routes in the current order: Beranda, Media, Album, Timeline, Visual, Template, Spectrum, AI Agent, Render.
-- Preserve the command bar, navigation, context panel, center workspace, inspector/AI dock, timeline dock, and status bar mental model.
-- WorkspaceRegistry/WorkspaceBundle becomes the explicit route owner.
-- Retire UI patches route-by-route only after visual/state parity.
-- No FFmpeg/ffprobe, media scan/probe, Accurate Preview, BeatAnalysis, Gemini/network, heavy cache generation, or render verification/publish on the UI thread.
-- UI busy/progress/cancel states mirror underlying task state machines.
-- Global command/status state derives from ProjectSession/application services.
+- Preserve existing production UI/workflow and all 9 route/order.
+- WorkspaceRegistry/WorkspaceBundle becomes explicit route owner.
+- UI patches retire route-by-route after visual/state parity.
+- Heavy process/network/media/analysis work is forbidden on UI thread.
 - Required visual/responsive evidence: 1672/100%, 1366/100%, 125%, 150%.
-- Current production UI is the migration no-regression baseline.
-- Frozen canonical 1672x941 goldens remain immutable references; historical pixel-match remediation is a separate workstream.
-- No new UI-image prompt/reference set is required for this preservation scope.
-- AI Agent preserves Send/Preview/Execute confirmation/Cancel/Undo truth.
-- Render Center can show COMPLETED only after RenderEngine verified publication.
-- Render is the last route to migrate.
+- Current production UI is migration no-regression baseline.
+- Frozen canonical goldens remain immutable references.
+- AI and Render UI reflect true underlying state/evidence.
+
+## STEP 10 Quality Rules
+- Existing 115-file test/workflow baseline is the minimum regression floor.
+- Test layers run from L0 Static/Supply through L7 Release Candidate.
+- FeatureParityRegistry maps MUST KEEP behavior to test evidence.
+- New facade/adapter ownership requires legacy-vs-new contract evidence.
+- Concurrency tests prove terminal state, stale-result rejection, and bounded resource behavior.
+- Save/render/recovery/process boundaries require fault-injection tests.
+- Real FFmpeg remains mandatory for affected critical paths.
+- 200-song/~3-hour structural stress remains mandatory.
+- Performance >10% regression versus same-environment baseline requires investigation.
+- Functional UI PASS and pixel-match PASS are separate claims.
+- Declared Python >=3.11 compatibility must be tested or revised explicitly.
+- No rerun-until-green release policy.
+- Exact extracted Windows portable ZIP is the final artifact under smoke.
+- Release requires supply-chain/license/secret/checksum/evidence-manifest PASS.
+- Promotion ladder: Q0 Developer -> Q1 Slice -> Q2 Integration -> Q3 Infrastructure -> Q4 Windows Artifact -> Q5 Release.
 
 ## Migration Rule
 Wrap current proven behavior first. Route one path through the facade. Prove parity. Only then retire the old direct path. Never dual-write project state.
 
 ## Current Handoff
 - Phase: PLANNING
-- Completed through: STEP 09
-- STEP 00–09: PASS
-- Next: STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate
+- Completed through: STEP 10
+- STEP 00–10: PASS
+- Next: STEP 11 — Windows Portable Build, Release, Rollback, dan Final Handoff
 - Coding: BLOCKED
+- Pre-coding requirement after STEP 11: place all STEP 00–11 planning/source-of-truth artifacts in the V2 repository before implementation begins.
