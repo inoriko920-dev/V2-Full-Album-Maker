@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 from pathlib import Path
 
@@ -224,3 +225,91 @@ def test_sidecar_staging_failure_does_not_publish_new_video(tmp_path, monkeypatc
         assert target.read_bytes() == f"old-final-{index}".encode()
     assert _transaction_debris(tmp_path) == []
     assert not list(tmp_path.glob(".*rendering*"))
+
+
+
+def test_partial_fallback_backup_copy_never_becomes_rollback_source(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stage = tmp_path / "stage-new.mp4"
+    target = tmp_path / "album.mp4"
+    stage.write_bytes(b"new-video")
+    target.write_bytes(b"old-good-video")
+
+    def no_hardlink(*args, **kwargs):
+        raise OSError(errno.EPERM, "hardlink unavailable")
+
+    def partial_copy_then_enospc(source, destination, *args, **kwargs):
+        Path(destination).write_bytes(b"PARTIAL")
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(bundle_module.os, "link", no_hardlink)
+    monkeypatch.setattr(bundle_module.shutil, "copy2", partial_copy_then_enospc)
+
+    with pytest.raises(RenderError, match="output lama dipulihkan"):
+        publish_bundle_transactional([(stage, target)])
+
+    assert target.read_bytes() == b"old-good-video"
+    assert not list(tmp_path.glob(".*.fam-backup-*"))
+    assert not list(tmp_path.glob(".*.copying-*.tmp"))
+    assert not list(tmp_path.glob(f"{JOURNAL_PREFIX}*{JOURNAL_SUFFIX}"))
+
+
+def test_fallback_backup_is_published_only_after_complete_copy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    stage = tmp_path / "stage-new.mp4"
+    target = tmp_path / "album.mp4"
+    stage.write_bytes(b"new-video")
+    target.write_bytes(b"old-good-video")
+
+    monkeypatch.setattr(
+        bundle_module.os,
+        "link",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.EPERM, "hardlink unavailable")
+        ),
+    )
+
+    publish_bundle_transactional([(stage, target)])
+
+    assert target.read_bytes() == b"new-video"
+    assert not list(tmp_path.glob(".*.fam-backup-*"))
+    assert not list(tmp_path.glob(".*.copying-*.tmp"))
+    assert not list(tmp_path.glob(f"{JOURNAL_PREFIX}*{JOURNAL_SUFFIX}"))
+
+
+
+def test_recovery_removes_crash_orphaned_fallback_backup_copy(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "album.mp4"
+    target.write_bytes(b"old-good-video")
+    stage = tmp_path / "stage-new.mp4"
+    stage.write_bytes(b"new-unpublished-video")
+
+    bundle_id = "powerloss"
+    backup = tmp_path / f".{target.name}.fam-backup-{bundle_id}"
+    orphan_copy = tmp_path / f".{backup.name}.copying-deadbeef.tmp"
+    orphan_copy.write_bytes(b"partial-large-backup")
+
+    journal = tmp_path / f"{JOURNAL_PREFIX}{bundle_id}{JOURNAL_SUFFIX}"
+    entries = [
+        {
+            "stage": str(stage),
+            "target": str(target),
+            "backup": str(backup),
+            "had_original": True,
+        }
+    ]
+    _write_journal(journal, "preparing", entries)
+
+    recover_interrupted_bundles(tmp_path)
+
+    assert target.read_bytes() == b"old-good-video"
+    assert not stage.exists()
+    assert not backup.exists()
+    assert not orphan_copy.exists()
+    assert not journal.exists()

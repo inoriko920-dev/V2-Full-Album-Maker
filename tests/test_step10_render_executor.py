@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import errno
 from pathlib import Path
 from types import SimpleNamespace
 import subprocess
@@ -391,3 +392,40 @@ def test_cancel_during_verification_never_replaces_existing_final(tmp_path: Path
     assert not list(tmp_path.glob(".*.rendering.mp4"))
     assert not list(tmp_path.glob(".fam-bundle-*.json"))
     assert not list(tmp_path.glob(".*.fam-backup-*"))
+
+
+
+def test_stage_allocation_enospc_fails_without_touching_existing_final(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    base = _job(tmp_path)
+    settings = replace(base.settings, overwrite=True)
+    job = RenderJob(base.snapshot, settings)
+    final = settings.final_output
+    final.write_bytes(b"old-final-stays")
+
+    def no_space(*args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(
+        "full_album_maker.render_executor_step10.tempfile.mkstemp",
+        no_space,
+    )
+
+    executor = RenderExecutor(
+        _capability(),
+        runner=FakeRunner(),
+        verifier=_verified,
+    )
+
+    with pytest.raises(OSError) as exc_info:
+        executor.execute(job)
+
+    assert exc_info.value.errno == errno.ENOSPC
+    assert job.state == RenderJobState.FAILED
+    assert job.error_code == "RENDER_FAILED"
+    assert "No space left on device" in job.error_message
+    assert final.read_bytes() == b"old-final-stays"
+    assert executor._active_attempt is None
+    assert not list(tmp_path.glob(".*.rendering.mp4"))

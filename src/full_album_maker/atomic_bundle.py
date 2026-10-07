@@ -27,17 +27,34 @@ def _replace_file(source: Path, target: Path) -> None:
 
 
 def _backup_file(source: Path, backup: Path) -> None:
-    """Preserve an existing final without moving it out of place.
+    """Preserve an existing final without ever exposing a partial backup.
 
     NTFS hard links make this O(1) for normal portable Windows use. Filesystems
-    without hard-link support fall back to copy2. The original final remains
-    visible until the new bundle is ready to replace it.
+    without hard-link support fall back to a staged copy in the same directory.
+    The public backup path is created only after the copy is complete and fsynced,
+    so ENOSPC / drive-loss cannot leave a partial backup that rollback might trust.
     """
 
     try:
         os.link(source, backup)
+        return
     except OSError:
-        shutil.copy2(source, backup)
+        pass
+
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{backup.name}.copying-",
+        suffix=".tmp",
+        dir=str(backup.parent),
+    )
+    os.close(fd)
+    temp_backup = Path(temp_name)
+    try:
+        shutil.copy2(source, temp_backup)
+        with temp_backup.open("rb+") as handle:
+            os.fsync(handle.fileno())
+        _replace_file(temp_backup, backup)
+    finally:
+        _cleanup_path(temp_backup)
 
 
 def _journal_payload(state: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -111,7 +128,16 @@ def _cleanup_transaction_files(entries: list[dict[str, Any]], journal: Path) -> 
         backup_raw = str(entry.get("backup") or "")
         stage_raw = str(entry.get("stage") or "")
         if backup_raw:
-            _cleanup_path(Path(backup_raw))
+            backup = Path(backup_raw)
+            _cleanup_path(backup)
+            # A hard process/power loss during fallback copy can bypass the
+            # _backup_file() finally block. The transaction journal already
+            # records the intended backup name, so clean only temp copies tied
+            # to this exact transaction instead of sweeping unrelated files.
+            for candidate in backup.parent.glob(
+                f".{backup.name}.copying-*.tmp"
+            ):
+                _cleanup_path(candidate)
         if stage_raw:
             _cleanup_path(Path(stage_raw))
     _cleanup_path(journal)
