@@ -32,7 +32,7 @@ from .playlist_editor import PlaylistPanel
 from .playlist_service_v2 import PlaylistServiceV2
 from .preview_scene import PreviewCanvas
 from .preview_service import AccuratePreviewService
-from .project_repository import load_project_document, save_project_document
+from .project_persistence import DEFAULT_PROJECT_PERSISTENCE
 from .property_inspector import PropertyInspector
 from .render_service_v2 import EditorRenderService
 from .timeline_editor import TimelineCanvas
@@ -463,7 +463,10 @@ class EditorWorkspace(QWidget):
             if answer != QMessageBox.StandardButton.Yes:
                 return
         try:
-            self.set_document(load_project_document(path), current_path=path)
+            self.set_document(
+                DEFAULT_PROJECT_PERSISTENCE.load_document(path),
+                current_path=path,
+            )
             self._set_status(f"Proyek v2 dibuka: {Path(path).name}")
         except Exception as exc:
             self._set_status(f"Buka proyek gagal: {exc}")
@@ -475,7 +478,10 @@ class EditorWorkspace(QWidget):
             if not path:
                 return False
         try:
-            saved = save_project_document(path, self.session.snapshot())
+            saved = DEFAULT_PROJECT_PERSISTENCE.save_document(
+                path,
+                self.session.snapshot(),
+            )
             self.current_project_path = saved
             self.session.mark_saved()
             self._refresh_all()
