@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 from full_album_maker.editor_models import ProjectDocument
 from full_album_maker.template_studio_step07 import TemplateStudioDraft, builtin_descriptors
@@ -67,3 +68,32 @@ def test_failed_key_is_memoized_but_changed_draft_gets_new_attempt(tmp_path: Pat
         assert calls == 2
     finally:
         cache.close()
+
+
+def test_close_suppresses_pending_thumbnail_delivery(tmp_path: Path) -> None:
+    document = ProjectDocument.new_empty("Close Fixture")
+    descriptor = builtin_descriptors()[0]
+    draft = TemplateStudioDraft(template_id=descriptor.template_id)
+    entered = threading.Event()
+    release = threading.Event()
+    delivered: list[tuple[str, str, str]] = []
+
+    def renderer(_document, item, _draft, _custom, destination: Path) -> str:
+        entered.set()
+        assert release.wait(timeout=5)
+        destination.write_bytes(b"png-fixture")
+        return str(destination)
+
+    cache = TemplateThumbnailCache(tmp_path / "cache", renderer=renderer, max_workers=1)
+    cache.thumbnail_ready.connect(
+        lambda template_id, path, status: delivered.append((template_id, path, status))
+    )
+
+    assert cache.request(document, descriptor, draft) is None
+    assert entered.wait(timeout=2)
+
+    cache.close()
+    release.set()
+    assert cache.wait_for_idle(timeout=3.0) is True
+
+    assert delivered == []
