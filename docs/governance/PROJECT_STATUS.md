@@ -4,7 +4,7 @@
 PLANNING
 
 ## Current STEP
-STEP 09 — UI Preservation, Responsiveness, dan Integration Contract
+STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate
 
 ## Gate Status
 - STEP 00: PASS
@@ -17,38 +17,39 @@ STEP 09 — UI Preservation, Responsiveness, dan Integration Contract
 - STEP 07: PASS
 - STEP 08: PASS
 - STEP 09: PASS
+- STEP 10: PASS
 
-## STEP 09 Final UI Direction
-- V2 preserves the existing production UI/workflow; this is not a redesign.
-- All 9 routes remain: Beranda, Media, Album, Timeline, Visual, Template, Spectrum, AI Agent, Render.
-- Existing shell composition remains recognizable: command bar, navigation, context, center workspace, right inspector/AI dock, timeline, status bar.
-- WorkspaceRegistry/WorkspaceBundle becomes the explicit route/lifecycle owner.
-- Runtime UI patch/install ownership retires route-by-route only after visual/state parity.
-- Heavy FFmpeg/ffprobe, media scan/probe, Accurate Preview, BeatAnalysis, Gemini/network, cache generation, render verification/publish work must not run on the UI thread.
-- Global command/status state is derived from ProjectSession/application services.
-- Required responsive evidence includes 1672/100%, 1366/100%, 125%, and 150%.
-- Current production UI is the migration no-regression baseline.
-- Frozen canonical 1672x941 goldens remain immutable reference evidence.
-- Historical pixel-match remediation is separate from architecture migration unless explicitly requested.
-- No new UI-image prompt/reference set is required because this V2 scope preserves the existing UI.
-- AI Agent preserves Send → Preview Diff → Execute confirmation → Cancel → Undo state truth.
-- Render Center reports completion only from verified/published RenderEngine state.
+## STEP 10 Final Quality Direction
+- Existing 115-file Python test suite/workflows are the minimum regression floor.
+- Testing is layered L0 Static/Supply through L7 Release Candidate.
+- Every MUST KEEP feature maps to explicit regression evidence.
+- New facades/ports require legacy-vs-new contract tests before legacy direct paths retire.
+- Concurrency/lifecycle tests must prove terminal state, stale-result rejection, and bounded resource behavior.
+- Destructive save/render/recovery/process boundaries require fault injection.
+- Real FFmpeg testing remains mandatory for affected render/Spectrum paths; mocks do not replace it.
+- 200-song/~3-hour Packed/Free structural stress remains an upper regression floor.
+- Performance is compared on same-environment baselines; >10% regression requires investigation unless a reliability/correctness tradeoff is explicitly accepted.
+- UI functional regression and pixel-match status are reported separately.
+- Final release requires exact Windows portable artifact, extracted-ZIP smoke, audio+video verification, supply-chain/license/secret checks, and checksum identity.
+- Rerun-until-green cannot waive an unexplained release blocker.
+- Declared Python >=3.11 compatibility must be tested on 3.11 or revised explicitly.
+- Promotion uses Q0 Developer → Q1 Slice → Q2 Integration → Q3 Infrastructure → Q4 Windows Artifact → Q5 Release.
 
 ## Coding Status
 BLOCKED — planning phase.
 
-No STEP 09 source-code, dependency, UI implementation, schema, renderer, or project-format change was made.
+No STEP 10 source-code, test-code, workflow, dependency, build-script, UI, schema, renderer, or project-format change was made.
 
 ## Next STEP
-STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate.
+STEP 11 — Windows Portable Build, Release, Rollback, dan Final Handoff.
 
-STEP 10 must define the full test pyramid, feature/behavior regression matrix, concurrency/fault injection, long-album stress, UI visual/responsive evidence, performance budgets, real-FFmpeg tests, Windows portable gates, and release-blocking acceptance criteria. It remains planning.
+STEP 11 must finalize reproducible Windows build/release packaging, exact artifact identity, licenses/notices, release evidence, rollback procedure, version/release notes, and AI handoff. After STEP 11 planning is complete, the full STEP 00–11 planning source-of-truth must be placed in the V2 repository before implementation is allowed.
 
 ## Canonical References
 - Master planning DOCX.
-- STEP 00–09 planning DOCX files.
-- `docs/planning/STEP_09_UI_PRESERVATION_RESPONSIVENESS_DAN_INTEGRATION_CONTRACT.md`
-- `docs/planning/STEP_09_ARTIFACT_INTEGRITY.txt`
-- prior STEP 01–08 planning summaries/integrity files.
+- STEP 00–10 planning DOCX files.
+- `docs/planning/STEP_10_TESTING_REGRESSION_STRESS_BENCHMARK_DAN_RELEASE_QUALITY_GATE.md`
+- `docs/planning/STEP_10_ARTIFACT_INTEGRITY.txt`
+- prior STEP 01–09 planning summaries/integrity files.
 - `docs/governance/PROJECT_GOVERNANCE.md`
 - `docs/governance/AI_HANDOFF.md`
