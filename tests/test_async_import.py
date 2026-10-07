@@ -235,3 +235,48 @@ def test_finished_import_is_discarded_if_project_changed(tmp_path, monkeypatch):
     assert replacement.videos == []
     assert "diabaikan karena proyek aktif sudah berganti" in window.log.toPlainText().casefold()
     _close_without_dirty_prompt(window)
+
+
+def test_pending_import_does_not_mutate_project_after_window_close(tmp_path, monkeypatch):
+    app = _app()
+    source = tmp_path / "closing-video.mp4"
+    source.write_bytes(b"video")
+    entered = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def slow_probe(path, kind=None):
+        assert kind == "video"
+        entered.set()
+        assert release.wait(timeout=5)
+        finished.set()
+        return 9.0
+
+    monkeypatch.setattr("full_album_maker.async_import.probe_duration", slow_probe)
+    monkeypatch.setattr(
+        "full_album_maker.async_import.QFileDialog.getOpenFileNames",
+        lambda *args, **kwargs: ([str(source)], "Video"),
+    )
+
+    window = MainWindow()
+    project = window.project
+    window.add_video()
+
+    assert entered.wait(timeout=2)
+    assert window._import_job_count == 1
+    assert project.videos == []
+
+    _close_without_dirty_prompt(window)
+    log_after_close = window.log.toPlainText()
+
+    release.set()
+    assert finished.wait(timeout=2)
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert project.videos == []
+    assert window._import_job_count == 0
+    assert window.log.toPlainText() == log_after_close
