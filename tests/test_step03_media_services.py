@@ -202,3 +202,96 @@ with _sidecar_file_lock(target):
         if process.poll() is None:
             process.terminate()
             process.wait(timeout=5)
+
+
+
+def test_unsaved_sidecar_metadata_survives_first_project_save(tmp_path: Path) -> None:
+    store = MediaSidecarStore(None)
+    store.update(
+        "asset-unsaved",
+        favorite=True,
+        tags=("pending",),
+        description="before first save",
+        persist=False,
+    )
+
+    project = tmp_path / "FirstSave.json"
+    project.write_text("{}", encoding="utf-8")
+
+    assert store.rebind_project_path(project, carry_current=True, persist=True) is True
+    assert store.project_path == project
+
+    restored = MediaSidecarStore(project).get("asset-unsaved")
+    assert restored.favorite is True
+    assert restored.tags == ("pending",)
+    assert restored.description == "before first save"
+
+
+def test_save_as_carries_current_sidecar_and_preserves_destination_only_records(
+    tmp_path: Path,
+) -> None:
+    source_project = tmp_path / "Source.json"
+    source_project.write_text("{}", encoding="utf-8")
+    source = MediaSidecarStore(source_project)
+    source.update(
+        "asset-current",
+        tags=("from-source",),
+        description="authoritative current project",
+    )
+
+    destination_project = tmp_path / "Destination.json"
+    destination_project.write_text("{}", encoding="utf-8")
+    destination = MediaSidecarStore(destination_project)
+    destination.update("asset-destination-only", favorite=True)
+
+    assert source.rebind_project_path(
+        destination_project,
+        carry_current=True,
+        persist=True,
+    ) is True
+
+    latest = MediaSidecarStore(destination_project)
+    assert latest.get("asset-current").tags == ("from-source",)
+    assert latest.get("asset-current").description == "authoritative current project"
+    assert latest.get("asset-destination-only").favorite is True
+
+
+def test_pending_relink_migration_survives_first_save_rebind(tmp_path: Path) -> None:
+    store = MediaSidecarStore(None)
+    store.set(
+        "old-id",
+        SidecarRecord(tags=("keep",), description="pending relink"),
+        persist=False,
+    )
+    store.migrate_asset_id("old-id", "new-id", persist=False)
+
+    project = tmp_path / "RelinkFirstSave.json"
+    project.write_text("{}", encoding="utf-8")
+    store.rebind_project_path(project, carry_current=True, persist=True)
+
+    latest = MediaSidecarStore(project)
+    assert latest.get("new-id").tags == ("keep",)
+    assert latest.get("new-id").description == "pending relink"
+    assert "old-id" not in latest.records()
+
+
+def test_rebind_without_carry_loads_destination_fresh(tmp_path: Path) -> None:
+    first_project = tmp_path / "First.json"
+    second_project = tmp_path / "Second.json"
+    first_project.write_text("{}", encoding="utf-8")
+    second_project.write_text("{}", encoding="utf-8")
+
+    first = MediaSidecarStore(first_project)
+    first.update("first-only", favorite=True)
+
+    second_seed = MediaSidecarStore(second_project)
+    second_seed.update("second-only", tags=("fresh",))
+
+    first.rebind_project_path(
+        second_project,
+        carry_current=False,
+        persist=False,
+    )
+
+    assert first.get("second-only").tags == ("fresh",)
+    assert "first-only" not in first.records()

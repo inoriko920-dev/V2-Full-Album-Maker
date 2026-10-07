@@ -50,8 +50,28 @@ def _route(self,route):
     elif route!='home': self._inspector_router.setCurrentIndex(1)
 def _refresh_media(self,reset=False):
     path=Path(self._foundation_project_path) if self._foundation_project_path else None
-    if reset or self._s03_project is not self.project or self._s03_store.project_path!=path:
-        self._s03_project=self.project; self._s03_store=MediaSidecarStore(self._foundation_project_path or None); self._s03_store.load()
+    project_changed=self._s03_project is not self.project
+    path_changed=self._s03_store.project_path!=path
+    if project_changed:
+        self._s03_project=self.project
+        self._s03_store=MediaSidecarStore(self._foundation_project_path or None)
+        self._s03_store.load()
+    elif path_changed:
+        # Same in-memory project gaining/changing its canonical path means
+        # First Save / Save As, not Open Project. Carry media metadata to the
+        # new sidecar and merge against any destination records.
+        self._s03_store.rebind_project_path(
+            self._foundation_project_path or None,
+            carry_current=True,
+            persist=bool(self._foundation_project_path),
+        )
+    elif reset and path is not None:
+        # Explicit refresh of the same saved project should see the latest
+        # sidecar written by another process. Unsaved projects keep their
+        # in-memory metadata because there is no disk source to reload.
+        self._s03_store=MediaSidecarStore(self._foundation_project_path)
+        self._s03_store.load()
+    self._s03_project=self.project
     self._s03_index.replace_all(build_project_assets(self.project,visual_mod.images(self.project),self._s03_store)); self.media_workspace.set_index(self._s03_index); self.media_context.set_counts(self._s03_index.counts()); cc={}
     for asset in self._s03_index.all():
         for name in asset.collections: cc[name]=cc.get(name,0)+1
