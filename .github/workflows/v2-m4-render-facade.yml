@@ -1,0 +1,129 @@
+name: V2 M4 Render facade validation
+
+on:
+  push:
+    branches:
+      - impl-m4-render-facade
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m4-render-facade:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_SCALE_FACTOR: '1'
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+
+    steps:
+      - name: Checkout M4 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Linux Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Q0 compile
+        run: |
+          python -m compileall -q src \
+            tests/test_v2_feature_parity_registry.py \
+            tests/test_v2_app_kernel.py \
+            tests/test_v2_task_lifecycle.py \
+            tests/test_v2_project_persistence.py \
+            tests/test_v2_render_engine.py
+
+      - name: Q0 M0 through M4 contracts
+        run: |
+          python -m pytest -q \
+            tests/test_v2_feature_parity_registry.py \
+            tests/test_v2_app_kernel.py \
+            tests/test_v2_task_lifecycle.py \
+            tests/test_v2_project_persistence.py \
+            tests/test_v2_render_engine.py \
+            tests/test_editor_v2_main_entrypoint.py
+
+      - name: Q1 STEP10 render parity
+        run: |
+          python -m pytest -q \
+            tests/test_step10_render_model.py \
+            tests/test_step10_render_preflight.py \
+            tests/test_step10_render_executor.py \
+            tests/test_step10_render_queue.py \
+            tests/test_step10_render_ui.py
+
+      - name: Q1 render safety and lifecycle
+        run: |
+          python -m pytest -q \
+            tests/test_atomic_render_bundle.py \
+            tests/test_render_lifecycle.py \
+            tests/test_editor_v2_render.py \
+            tests/test_renderer_integration.py \
+            tests/test_safety_and_renderer.py
+
+      - name: Q1 200-song long-album structural stress
+        run: |
+          python -m pytest -q \
+            tests/test_editor_v2_s12_performance.py::test_packed_200_song_three_hour_project_resolves_and_externalizes_graph \
+            tests/test_editor_v2_s12_performance.py::test_free_200_song_three_hour_project_resolves_and_uses_bounded_command
+
+      - name: Q1 production canonical save
+        run: python -m pytest -q tests/test_step11_production_integration.py::test_step11_production_shell_uses_one_state_and_canonical_save
+
+      - name: Q1 nine-workspace launch characterization
+        run: python -m pytest -q tests/test_step11_e2e.py::test_nine_workspace_navigation_is_read_only_in_production_subprocess
+
+  real-ffmpeg-m4:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+
+    steps:
+      - name: Checkout M4 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install targeted FFmpeg and Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Q1 real FFmpeg through RenderEngine
+        timeout-minutes: 4
+        run: |
+          python -m pytest -q \
+            tests/test_v2_render_engine.py::test_real_ffmpeg_render_engine_preserves_verified_publish_contract \
+            tests/test_step10_render_real_ffmpeg.py
