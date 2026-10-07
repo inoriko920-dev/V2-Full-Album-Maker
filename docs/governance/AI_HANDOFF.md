@@ -69,7 +69,7 @@ Verified evidence:
 5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
 6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
 
-Implementation is active. M0/T1 through M5 are completed and gate-protected.
+Implementation is active. M0/T1 through M6 are completed and gate-protected.
 
 ## M0/T1 Implementation Result — PASS
 - Branch: `impl-m0-t1-feature-parity`
@@ -132,12 +132,26 @@ Implementation is active. M0/T1 through M5 are completed and gate-protected.
 - GitHub Actions run `37594113013`: 50 M0–M5 contracts passed (2 skipped), 9 focused probe/preview/cache parity tests passed, 12 persistence/production-shell tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M5 job PASS with 3 tests.
 - Detailed records: `docs/implementation/M5_PROBE_PREVIEW_CACHE.md` and `docs/implementation/M5_EVIDENCE.md`.
 
+## M6 Implementation Result — PASS
+- Branch: `impl-m6-beat-analysis`
+- Added AppKernel-owned `BeatAnalysisService` sharing the exact M2 TaskSupervisor and M5 CacheManager.
+- BeatAnalysis is derived/cacheable data only and remains separate from authored BeatResponse.
+- FFmpeg derives a compact low-rate amplitude envelope; deterministic detection operates on that derived data.
+- No fake reactivity: silence/tool/decode failure yields no beat events and an honest non-reactive fallback.
+- Source fingerprint + analyzer/config version protects cache identity; corrupt/stale cache is disposable.
+- Async analysis uses TaskSupervisor/TaskScope generation invalidation and adds no private worker pool.
+- Real-FFmpeg evidence proves pulse detection, silence fallback, and byte-identical source/master audio before/after analysis.
+- Existing FFmpeg Spectrum/circular Spectrum and Accurate Preview/final render semantics remain unchanged and parity-tested.
+- No M7 WorkspaceRegistry, UI redesign, schema bump, dependency, compiler, or release work was performed.
+- GitHub Actions run `37595757999`: 58 M0–M6 contracts passed (4 skipped), 19 Beat/Spectrum parity tests passed (1 skipped), 7 Accurate Preview/render parity tests passed (1 skipped), 12 persistence/production-shell tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M6 job PASS with 4 tests.
+- Detailed records: `docs/implementation/M6_BEAT_ANALYSIS.md` and `docs/implementation/M6_EVIDENCE.md`.
+
 ## Next Work
-- M6: Beat Analysis only.
-- Re-read the STEP 07 canonical planning decisions before implementation.
-- Preserve master-audio timing, deterministic derived analysis inputs, and non-reactive fallback behavior.
-- Reuse the M2 lifecycle boundary and M5 cache/application-service ownership rather than creating parallel worker/cache owners.
-- Do not proceed to M7 until M6 gate PASS.
+- M7: Workspace Registry only.
+- Re-read STEP 03 and STEP 09 canonical decisions before implementation.
+- Replace runtime workspace/patch ownership one route at a time; preserve all 9 production routes and current UI/workflow.
+- Keep ProjectDocument/EditorSession and the M2–M6 service boundaries authoritative.
+- Do not proceed to M8 Legacy Bridge Retirement until M7 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -149,4 +163,5 @@ Implementation is active. M0/T1 through M5 are completed and gate-protected.
 - M3 ProjectPersistence: PASS
 - M4 RenderEngine Facade: PASS
 - M5 MediaProbeService / PreviewEngine / CacheManager: PASS
-- Next operational action: M6 Beat Analysis only; then report gate before M7.
+- M6 BeatAnalysisService: PASS
+- Next operational action: M7 Workspace Registry only; then report gate before M8.

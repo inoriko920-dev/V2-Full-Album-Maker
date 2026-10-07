@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M5 PROBE / PREVIEW / CACHE
+IMPLEMENTATION — M6 BEAT ANALYSIS
 
 ## Current STEP
-M5 — Probe / Preview / Cache — PASS
+M6 — Beat Analysis — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M5 — Probe / Preview / Cache — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, M3, M4, and M5 are implemented and validated.
+M0/T1, M1, M2, M3, M4, M5, and M6 are implemented and validated.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -79,14 +79,28 @@ M5 result:
 
 Validated runtime candidate `6aa2a14a3bb52d0b598cba19526c3b99191adedd` on Actions run `37594113013`: Q0 compile PASS; 50 M0–M5 contract tests passed (2 skipped); 9 focused probe/preview/cache parity tests passed; 12 persistence/production-shell tests passed; 2 long-album structural stress tests passed; real-FFmpeg M5 job PASS with 3 tests.
 
+M6 result:
+- AppKernel/CompositionRoot now owns one `BeatAnalysisService` sharing the exact M2 TaskSupervisor and M5 CacheManager;
+- derived BeatAnalysis remains separate from authored BeatResponse and is never ProjectDocument truth;
+- default FFmpeg adapter derives a low-rate mono amplitude envelope and does not alter source/master audio;
+- deterministic transient detection produces bounded beat events from real envelope evidence only;
+- silence and decoder/tool failures remain honest non-reactive states with no fake beat events;
+- beat-analysis cache identity includes source fingerprint, namespace version, analyzer version, sample rate, and detector timing parameters;
+- corrupt/stale beat cache is a disposable miss; valid analysis remains usable even if cache publication fails;
+- async analysis routes through TaskSupervisor/TaskScope with generation invalidation and no private worker pool;
+- existing FFmpeg Spectrum, circular Spectrum, Accurate Preview, final render compiler chain, ProjectDocument schema v2, TIMEBASE=240000, UI, dependencies, and release behavior remain unchanged;
+- M7 WorkspaceRegistry was not started.
+
+Validated candidate `a0d5a88a372f373c852c40242cea82511c1fd3dc` on Actions run `37595757999`: Q0 compile PASS; 58 M0–M6 contract tests passed (4 skipped); 19 Beat/Spectrum parity tests passed (1 skipped); 7 Accurate Preview/render parity tests passed (1 skipped); 12 persistence/production-shell tests passed; 2 long-album structural stress tests passed; real-FFmpeg M6 job PASS with 4 tests.
+
 ## Next Operational Step
-M5 is PASS. On the next explicit implementation turn:
-1. Start **M6 — Beat Analysis** only.
-2. Read the STEP 07 canonical planning decisions and current M5 cache/preview contracts before implementation.
-3. Preserve master-audio timing and existing non-reactive fallback behavior.
-4. Reuse the approved lifecycle/cache/application-service boundaries; do not redesign UI or project schema during M6.
-5. Run focused beat-reactive, preview/render parity, fallback, and affected real-FFmpeg evidence before reporting M6 PASS.
-6. Do not proceed to M7 Workspace Registry in the same turn unless explicitly instructed otherwise.
+M6 is PASS. On the next explicit implementation turn:
+1. Start **M7 — Workspace Registry** only.
+2. Re-read STEP 03/09 architecture and UI-preservation decisions before implementation.
+3. Replace runtime patch/workspace ownership one route at a time behind the approved WorkspaceRegistry boundary.
+4. Preserve all 9 production routes, UI/workflow behavior, ProjectDocument ownership, and current service facades.
+5. Run focused route-registration/navigation, production-shell, UI-preservation, persistence, and affected regression evidence before reporting M7 PASS.
+6. Do not proceed to M8 Legacy Bridge Retirement in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.
