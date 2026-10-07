@@ -1,6 +1,6 @@
 # M0/T1 — Feature Parity Characterization Map
 
-Status: **IMPLEMENTED — validation pending**
+Status: **PASS — M0/T1 characterization implemented and validated**
 
 This map is the human-readable companion to
 `src/full_album_maker/feature_parity_registry.py`.
@@ -168,3 +168,23 @@ M0/T1 passes only when:
 - C-01 remains explicitly governed outside runtime code;
 - this characterization map contains every registry ID;
 - no runtime startup/module wiring changes are introduced.
+
+
+## Validation Evidence
+
+Final gate basis:
+- Branch: `impl-m0-t1-feature-parity`
+- Candidate commit initially validated: `6e7a1749f587a494f09eab39ff5da489b5df3ac2`
+- GitHub Actions run: `37583231121`
+- Job: `m0-characterization`
+- Q0 compile: PASS
+- Registry contract tests: **6 passed**
+- Q1 baseline navigation characterization smoke: **1 passed**
+- Diff from pre-implementation head contained only:
+  - `src/full_album_maker/feature_parity_registry.py`
+  - `tests/test_v2_feature_parity_registry.py`
+  - this characterization map
+  - `.github/workflows/v2-m0-feature-parity.yml`
+- No existing application runtime file was edited.
+
+The status/evidence commit that records this result must rerun the same workflow on its own final head before M1 starts.

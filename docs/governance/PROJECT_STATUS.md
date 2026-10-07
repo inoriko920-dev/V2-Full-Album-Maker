@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION READY — PRE-CODING DOCUMENTATION GATE PASS
+IMPLEMENTATION — M0/T1 CHARACTERIZATION
 
 ## Current STEP
-PRE-CODING DOCUMENTATION GATE — PASS; M0/T1 READY (NOT STARTED)
+M0/T1 — FeatureParityRegistry + Characterization Map — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,17 +37,26 @@ PRE-CODING DOCUMENTATION GATE — PASS; M0/T1 READY (NOT STARTED)
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-UNLOCKED BY DOCUMENTATION GATE — implementation is ready, but no implementation coding has started yet.
+M0/T1 IMPLEMENTED AND VALIDATED. This slice is additive characterization infrastructure only.
 
-Canonical MASTER + STEP00–11 DOCX binaries are present at `docs/planning/source-of-truth/`, verified 13/13 by exact Git blob identity against local canonical bytes, whose SHA-256 values match `PLANNING_ARTIFACTS_MANIFEST.md`. No application source, workflow, dependency, UI, renderer, schema, version, or release mutation was made by this gate.
+Implemented:
+- machine-readable `FeatureParityRegistry` with 51 MUST KEEP behavior families across 11 areas;
+- exact mapping to existing baseline test functions/workflow evidence;
+- human-readable M0/T1 characterization map;
+- focused Q0/Q1 GitHub Actions gate.
+
+Validated on Actions run `37583231121`: compile PASS, 6 registry tests PASS, 1 baseline nine-workspace navigation smoke PASS.
+
+No existing runtime application file, UI, renderer, project schema, dependency, version, or legacy implementation was modified by M0/T1.
 
 ## Next Operational Step
-Documentation gate is PASS. On the next explicit implementation turn:
-1. Start **M0/T1 — FeatureParityRegistry + characterization map** only.
-2. Preserve all STEP01 behavior contracts and STEP08 MUST KEEP features.
-3. Do not refactor application architecture yet beyond what M0/T1 requires.
-4. After M0/T1 gate PASS, proceed later to additive M1 AppKernel/CompositionRoot.
-5. Continue one bounded migration slice per turn unless explicitly instructed otherwise.
+M0/T1 is PASS. On the next explicit implementation turn:
+1. Start **M1 — additive AppKernel/CompositionRoot** only.
+2. Wrap current proven behavior; do not replace services or delete legacy ownership yet.
+3. Keep ProjectDocument + EditorController authoritative.
+4. Use FeatureParityRegistry IDs to declare touched behavior.
+5. Run the required Q0/Q1 gate before reporting M1 PASS.
+6. Do not proceed to M2 in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.

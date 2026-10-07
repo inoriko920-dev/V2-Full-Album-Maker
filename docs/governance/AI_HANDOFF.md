@@ -71,14 +71,22 @@ Verified evidence:
 
 Implementation is now allowed, but has **not started yet**.
 
-## First Work After Unlock
-- M0 / T1: FeatureParityRegistry + characterization map.
-- Then M1: additive AppKernel/CompositionRoot using current proven behavior through legacy adapters.
+## M0/T1 Implementation Result — PASS
+- Branch: `impl-m0-t1-feature-parity`
+- FeatureParityRegistry: 51 MUST KEEP behavior families / 11 areas.
+- Registry evidence points to actual existing baseline test functions and workflows.
+- Characterization map: `docs/implementation/M0_T1_FEATURE_PARITY_CHARACTERIZATION_MAP.md`.
+- GitHub Actions run `37583231121`: Q0 compile PASS, 6 registry tests PASS, Q1 nine-workspace navigation smoke PASS.
+- Existing runtime application files were not edited.
+
+## Next Work
+- M1: additive AppKernel/CompositionRoot using current proven behavior through legacy adapters.
+- Do not replace existing service implementations or delete legacy ownership in M1.
 - Do not start with animation catalog, compiler rewrite, route patch deletion, or release work.
 
 ## Current Handoff
-- Phase: IMPLEMENTATION READY
+- Phase: IMPLEMENTATION
 - Completed planning: STEP 00–11 PASS
 - Pre-coding documentation gate: PASS
-- Coding: UNLOCKED, NOT STARTED
-- Next operational action: M0/T1 FeatureParityRegistry + characterization map only; then report gate before M1.
+- M0/T1 FeatureParityRegistry + characterization: PASS
+- Next operational action: M1 AppKernel/CompositionRoot only; then report gate before M2.
