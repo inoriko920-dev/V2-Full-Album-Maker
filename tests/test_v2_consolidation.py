@@ -103,8 +103,9 @@ def test_main_has_one_runtime_bootstrap_owner_not_individual_installer_wiring() 
 def test_consolidation_does_not_change_frozen_schema_or_route_contracts() -> None:
     models = (ROOT / "src" / "full_album_maker" / "editor_models.py").read_text(encoding="utf-8")
     tokens = (ROOT / "src" / "full_album_maker" / "foundation_tokens.py").read_text(encoding="utf-8")
-    assert "TIMEBASE = 240000" in models
-    assert "schema_version: int = 2" in models
+    assert "TIMEBASE = 240_000" in models
+    assert "SCHEMA_VERSION = 2" in models
+    assert "schema_version: int = SCHEMA_VERSION" in models
     for route in (
         "home",
         "media",
