@@ -19,9 +19,11 @@ from .integration_core_step11 import (
 )
 from .integration_lifecycle_step11 import (
     DebouncedAutosaveCoordinator,
-    IntegrationRecoveryStore,
     AutosaveRequest,
-    save_verified_legacy_project,
+)
+from .project_persistence import (
+    DEFAULT_PROJECT_PERSISTENCE,
+    RecoveryClassification,
 )
 from .paths import data_dir
 
@@ -215,7 +217,7 @@ def _schedule_autosave_flush(self) -> None:
 
     def work() -> tuple[AutosaveRequest, bool, str]:
         try:
-            IntegrationRecoveryStore(path).write(request)
+            DEFAULT_PROJECT_PERSISTENCE.write_recovery(path, request)
             return request, True, ""
         except Exception as exc:
             return request, False, str(exc)
@@ -251,7 +253,9 @@ def _autosave_done(self, request: AutosaveRequest, success: bool, error: str) ->
 
 
 def _clear_recovery(self) -> None:
-    IntegrationRecoveryStore(_recovery_path(self._s11_project_token)).clear()
+    DEFAULT_PROJECT_PERSISTENCE.clear_recovery(
+        _recovery_path(self._s11_project_token)
+    )
     self._s11_autosave = DebouncedAutosaveCoordinator()
     self._s11_autosave_timer.stop()
 
@@ -301,7 +305,11 @@ def _foundation_save_project(self) -> bool:
             return False
     self.foundation_state.set_status(save=("Menyimpan…", "warning"))
     try:
-        saved = save_verified_legacy_project(path, self.project, expected)
+        saved = DEFAULT_PROJECT_PERSISTENCE.save_compatibility(
+            path,
+            self.project,
+            expected,
+        )
         self._foundation_project_path = str(saved)
         try:
             self._home_recent_service.touch(str(saved), self.project)
@@ -335,19 +343,38 @@ def _adopt(self, project, result, *, route="media", add_recent=True):
 
 
 def _maybe_offer_recovery(self, canonical_document) -> bool:
-    store = IntegrationRecoveryStore(_recovery_path(self._s11_project_token))
-    candidate = store.discover()
-    if candidate is None:
+    recovery_path = _recovery_path(self._s11_project_token)
+    assessment = DEFAULT_PROJECT_PERSISTENCE.assess_recovery(
+        recovery_path,
+        canonical_document,
+        canonical_path=self._s11_project_path(),
+    )
+    if assessment is None:
         return False
-    try:
-        recovered = candidate.document()
-    except Exception:
+
+    if assessment.classification == RecoveryClassification.SAME:
+        # Same content is redundant, not recovery evidence we need to retain.
+        DEFAULT_PROJECT_PERSISTENCE.clear_recovery(recovery_path)
         return False
-    if normalized_project_hash(recovered) == normalized_project_hash(canonical_document):
-        store.clear()
+
+    if assessment.classification in {
+        RecoveryClassification.CORRUPT,
+        RecoveryClassification.STALE,
+        RecoveryClassification.FOREIGN,
+    }:
+        # Never silently delete corrupt/foreign/stale evidence. They are ignored
+        # for current UX and remain available for diagnostics/manual recovery.
         return False
-    if candidate.revision < canonical_document.revision:
+
+    candidate = assessment.envelope
+    recovered = assessment.document
+    if (
+        assessment.classification != RecoveryClassification.NEWER
+        or candidate is None
+        or recovered is None
+    ):
         return False
+
     if str(os.environ.get("FAM_STEP11_NO_RECOVERY_PROMPT", "")).strip() == "1":
         self.foundation_state.set_status(save=("Recovery tersedia", "warning"))
         return True
