@@ -9,6 +9,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtGui import QImage
 
 from full_album_maker.media_library_model import MediaAsset, MediaMetadata, MediaStatus, MediaType, stable_asset_id
+from full_album_maker.cache_manager import CacheManager, CacheNamespacePolicy
+import full_album_maker.media_preview_cache as preview_module
 from full_album_maker.media_preview_cache import generate_preview, invalidate_source, preview_cache_path
 
 
@@ -58,3 +60,41 @@ def test_missing_media_has_no_usable_preview(tmp_path):
         pass
     else:
         raise AssertionError("Missing media tidak boleh menghasilkan preview cache")
+
+
+
+def test_source_change_during_preview_generation_never_publishes_cache(
+    tmp_path,
+    monkeypatch,
+):
+    source = tmp_path / "mutating.png"
+    source.write_bytes(b"original-source")
+    asset = _photo(source)
+    cache_root = tmp_path / "cache"
+    manager = CacheManager(
+        {
+            "media-preview": CacheNamespacePolicy(
+                "media-preview",
+                1,
+                lambda: cache_root,
+            )
+        }
+    )
+    expected_target = preview_cache_path(asset, cache_manager=manager)
+
+    def mutate_while_generating(_source, target):
+        Path(target).write_bytes(b"valid-preview-bytes")
+        source.write_bytes(b"changed-source-bytes-longer")
+
+    monkeypatch.setattr(preview_module, "_generate_photo", mutate_while_generating)
+
+    try:
+        generate_preview(asset, cache_manager=manager)
+    except RuntimeError as exc:
+        assert "berubah" in str(exc)
+    else:
+        raise AssertionError("Mutasi source harus membatalkan publikasi preview cache")
+
+    assert not expected_target.exists()
+    assert not expected_target.with_suffix(".json").exists()
+    assert not list(cache_root.glob("*.png"))
