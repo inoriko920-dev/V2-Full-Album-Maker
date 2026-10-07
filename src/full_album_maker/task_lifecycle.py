@@ -359,7 +359,7 @@ class TaskSupervisor:
         elapsed = monotonic() - started
         return ShutdownReport(
             submitted=submitted,
-            completed=len(done),
+            completed=max(0, submitted - len(not_done)),
             unfinished=len(not_done),
             timed_out=bool(not_done),
             elapsed_seconds=elapsed,
