@@ -78,20 +78,40 @@ def _workspace_changed(self, route: str) -> None:
 
 
 def _quiesce_autosave(self, *, restart: bool) -> None:
+    runtime = getattr(self, "_s11_autosave_runtime", None)
+    next_epoch = int(getattr(self, "_s11_autosave_epoch", 0)) + 1
+    self._s11_autosave_epoch = next_epoch
+    self._s11_autosave_accepting = False
+    if runtime is not None:
+        runtime["epoch"] = next_epoch
+        runtime["accepting"] = False
+
     timer = getattr(self, "_s11_autosave_timer", None)
     if timer is not None:
         timer.stop()
     coordinator = getattr(self, "_s11_autosave", None)
     if coordinator is not None:
         coordinator.take_pending()
-    executor = getattr(self, "_s11_executor", None)
+
+    executor = (
+        runtime.get("executor")
+        if runtime is not None
+        else getattr(self, "_s11_executor", None)
+    )
     if executor is not None:
         executor.shutdown(wait=True, cancel_futures=True)
-    self._s11_executor = (
+
+    new_executor = (
         ThreadPoolExecutor(max_workers=1, thread_name_prefix="fam-step11-autosave")
         if restart
         else None
     )
+    self._s11_executor = new_executor
+    self._s11_autosave_accepting = bool(restart)
+    if runtime is not None:
+        runtime["executor"] = new_executor
+        runtime["accepting"] = bool(restart)
+        runtime["closed"] = not bool(restart)
 
 
 def _foundation_save(self) -> bool:
@@ -106,7 +126,13 @@ def _close_event(self, event) -> None:
     except Exception:
         accepted = True
     if accepted:
+        # Worker shutdown must complete before releasing the recovery-session
+        # lease. Otherwise another instance may classify a still-writing autosave
+        # as abandoned while this process is still publishing it.
         self._s11_quiesce_autosave(restart=False)
+        recovery_session = getattr(self, "_s11_recovery_session", None)
+        if recovery_session is not None:
+            recovery_session.close()
         for name in ("_s08_preview_worker", "_s03_preview_cache"):
             worker = getattr(self, name, None)
             close = getattr(worker, "close", None)

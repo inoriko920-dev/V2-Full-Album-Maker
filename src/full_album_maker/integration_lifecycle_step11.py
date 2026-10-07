@@ -144,6 +144,7 @@ class AutosaveRequest:
     source_project_path: str
     document_payload: dict
     owner_session_id: str = ""
+    lifecycle_epoch: int = 0
 
     def document(self) -> ProjectDocument:
         return ProjectDocument.from_dict(deepcopy(self.document_payload))
@@ -288,6 +289,7 @@ class DebouncedAutosaveCoordinator:
         project_path: str = "",
         token: str = "",
         owner_session_id: str = "",
+        lifecycle_epoch: int = 0,
     ) -> AutosaveRequest:
         snapshot = document.clone()
         snapshot.validate()
@@ -301,6 +303,7 @@ class DebouncedAutosaveCoordinator:
             source_project_path=str(project_path or ""),
             document_payload=snapshot.to_dict(),
             owner_session_id=str(owner_session_id or ""),
+            lifecycle_epoch=int(lifecycle_epoch),
         )
         self._latest = request
         self._status = AutosaveStatus(
@@ -353,6 +356,7 @@ def request_from_document(
     project_path: str = "",
     generation: int = 1,
     owner_session_id: str = "",
+    lifecycle_epoch: int = 0,
 ) -> AutosaveRequest:
     """Deterministic helper for recovery tests/tools without coordinator state."""
 
@@ -365,6 +369,7 @@ def request_from_document(
         source_project_path=str(project_path or ""),
         document_payload=snapshot.to_dict(),
         owner_session_id=str(owner_session_id or ""),
+        lifecycle_epoch=int(lifecycle_epoch),
     )
 
 

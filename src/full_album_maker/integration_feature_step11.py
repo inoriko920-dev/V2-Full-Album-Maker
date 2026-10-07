@@ -110,6 +110,16 @@ def _sync_foundation_status(self) -> None:
 
 
 def _bind_project(self, document, *, clear_selection: bool = True) -> None:
+    # A project switch must first drain the previous project's autosave worker.
+    # Flush a still-pending committed snapshot so unsaved recovery evidence is
+    # not lost, then invalidate every queued callback from the old lifecycle.
+    if hasattr(self, "_s11_autosave"):
+        if self._s11_autosave.status.pending:
+            self._s11_schedule_autosave_flush()
+        quiesce = getattr(self, "_s11_quiesce_autosave", None)
+        if callable(quiesce):
+            quiesce(restart=True)
+
     self._s11_project_token = self._s11_current_token()
     canonical_path = self._s11_project_path()
     self._s11_canonical_path = (
@@ -189,6 +199,9 @@ def _document_changed(self, document) -> None:
             project_path=self._s11_project_path(),
             token=self._s11_project_token,
             owner_session_id=self._s11_recovery_session.session_id,
+            lifecycle_epoch=int(
+                getattr(self, "_s11_autosave_epoch", 0)
+            ),
         )
         self._s11_autosave_timer.start()
     else:
@@ -242,6 +255,14 @@ def _visual_selection(self, values, primary: str) -> None:
 
 
 def _schedule_autosave_flush(self) -> None:
+    runtime = getattr(self, "_s11_autosave_runtime", None)
+    if runtime is not None and (
+        bool(runtime.get("closed"))
+        or not bool(runtime.get("accepting", True))
+        or runtime.get("executor") is None
+    ):
+        return
+
     request = self._s11_autosave.take_pending()
     if request is None:
         return
@@ -253,6 +274,16 @@ def _schedule_autosave_flush(self) -> None:
         request.project_token,
         request.owner_session_id or self._s11_recovery_session.session_id,
     )
+    bridge = self._s11_bridge
+    runtime = runtime or {
+        "epoch": int(getattr(self, "_s11_autosave_epoch", 0)),
+        "accepting": True,
+        "closed": False,
+        "executor": getattr(self, "_s11_executor", None),
+    }
+    executor = runtime.get("executor") or getattr(self, "_s11_executor", None)
+    if executor is None:
+        return
 
     def work() -> tuple[AutosaveRequest, bool, str]:
         try:
@@ -261,21 +292,45 @@ def _schedule_autosave_flush(self) -> None:
         except Exception as exc:
             return request, False, str(exc)
 
-    future = self._s11_executor.submit(work)
+    try:
+        future = executor.submit(work)
+    except RuntimeError:
+        # A timeout already queued before close/project-switch may race executor
+        # shutdown. Treat it as invalidated work, never as a UI/runtime failure.
+        return
 
     def done(completed) -> None:
         try:
             req, success, error = completed.result()
         except Exception as exc:
             req, success, error = request, False, str(exc)
-        self._s11_bridge.autosave_done.emit(req, success, error)
+        if (
+            bool(runtime.get("closed"))
+            or int(req.lifecycle_epoch) != int(runtime.get("epoch", -1))
+            or not bool(runtime.get("accepting", False))
+        ):
+            return
+        try:
+            bridge.autosave_done.emit(req, success, error)
+        except RuntimeError:
+            # QObject teardown won the race. The recovery file, if written, is
+            # still valid evidence; no callback may resurrect UI state.
+            return
 
     future.add_done_callback(done)
 
 
 def _autosave_done(self, request: AutosaveRequest, success: bool, error: str) -> None:
-    # Project switch: completion remains valid for its own recovery file but must
-    # not affect current project status.
+    # Project switch/close invalidates the lifecycle epoch before waiting for the
+    # worker. A queued Qt signal from the old lifecycle must never update the new
+    # project or a closing window, even if the same project token is reopened.
+    runtime = getattr(self, "_s11_autosave_runtime", None)
+    if runtime is not None and (
+        bool(runtime.get("closed"))
+        or int(request.lifecycle_epoch) != int(runtime.get("epoch", -1))
+        or not bool(runtime.get("accepting", False))
+    ):
+        return
     if request.project_token != self._s11_project_token:
         return
     status = self._s11_autosave.complete(request, success=bool(success), error=str(error))
@@ -503,6 +558,12 @@ def _close_event(self, event) -> None:
                 event.ignore()
                 return
         else:
+            # Stop/wait for in-flight autosave before deleting recovery. Without
+            # this ordering a worker can recreate the just-cleared file after an
+            # explicit Discard.
+            quiesce = getattr(self, "_s11_quiesce_autosave", None)
+            if callable(quiesce):
+                quiesce(restart=True)
             # STEP11 owns dirty/close UX. Discard resets the authoritative session
             # and clears recovery so the same explicitly discarded edit is not
             # offered again on the next launch.
@@ -516,12 +577,7 @@ def _close_event(self, event) -> None:
         # owner once Foundation/ProjectDocument STEP11 is active.
         self._s11_mark_compatibility_persisted(self._s11_project_path())
 
-    result = _originals["close_event"](self, event)
-    if event.isAccepted():
-        recovery_session = getattr(self, "_s11_recovery_session", None)
-        if recovery_session is not None:
-            recovery_session.close()
-    return result
+    return _originals["close_event"](self, event)
 
 
 def _ai_selected_song_ids(self) -> tuple[str, ...]:
@@ -540,10 +596,6 @@ def _init(self, *args, **kwargs) -> None:
     _originals["window_init"](self, *args, **kwargs)
     self._s11_recovery_session = RecoverySessionLease(_recovery_root())
     self._s11_recovery_session.start()
-    recovery_session = self._s11_recovery_session
-    self.destroyed.connect(
-        lambda *_args, recovery_session=recovery_session: recovery_session.close()
-    )
     self.event_hub = DomainEventHub()
     document = self.editor_workspace.document()
     self._s11_project_token = project_token(document, self._s11_project_path())
@@ -552,7 +604,33 @@ def _init(self, *args, **kwargs) -> None:
     self._s11_last_seen_revision = document.revision
     self._s11_last_seen_hash = normalized_project_hash(document)
     self._s11_autosave = DebouncedAutosaveCoordinator()
+    self._s11_autosave_epoch = 0
+    self._s11_autosave_accepting = True
     self._s11_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fam-step11-autosave")
+    self._s11_autosave_runtime = {
+        "epoch": 0,
+        "accepting": True,
+        "closed": False,
+        "executor": self._s11_executor,
+    }
+    autosave_runtime = self._s11_autosave_runtime
+    recovery_session = self._s11_recovery_session
+
+    def finalize_autosave_runtime(
+        *_args,
+        runtime=autosave_runtime,
+        recovery_session=recovery_session,
+    ):
+        runtime["epoch"] = int(runtime.get("epoch", 0)) + 1
+        runtime["accepting"] = False
+        runtime["closed"] = True
+        executor = runtime.get("executor")
+        runtime["executor"] = None
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
+        recovery_session.close()
+
+    self.destroyed.connect(finalize_autosave_runtime)
     self._s11_bridge = _IntegrationBridge(self)
     self._s11_bridge.autosave_done.connect(self._s11_autosave_done)
     self._s11_autosave_timer = QTimer(self)
