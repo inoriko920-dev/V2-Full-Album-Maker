@@ -43,7 +43,7 @@ _ALLOWED_TRANSITIONS: dict[RenderJobState, frozenset[RenderJobState]] = {
     RenderJobState.STARTING: frozenset({RenderJobState.RUNNING, RenderJobState.FAILED, RenderJobState.CANCELLED}),
     RenderJobState.RUNNING: frozenset({RenderJobState.PAUSED, RenderJobState.FINALIZING, RenderJobState.FAILED, RenderJobState.CANCELLED, RenderJobState.INTERRUPTED}),
     RenderJobState.PAUSED: frozenset({RenderJobState.RUNNING, RenderJobState.CANCELLED, RenderJobState.INTERRUPTED}),
-    RenderJobState.FINALIZING: frozenset({RenderJobState.COMPLETED, RenderJobState.FAILED, RenderJobState.INTERRUPTED}),
+    RenderJobState.FINALIZING: frozenset({RenderJobState.COMPLETED, RenderJobState.FAILED, RenderJobState.CANCELLED, RenderJobState.INTERRUPTED}),
     RenderJobState.COMPLETED: frozenset(),
     RenderJobState.FAILED: frozenset(),
     RenderJobState.CANCELLED: frozenset(),
@@ -319,6 +319,7 @@ class RenderJob:
         return self.state in {
             RenderJobState.PREFLIGHTING, RenderJobState.READY, RenderJobState.QUEUED,
             RenderJobState.STARTING, RenderJobState.RUNNING, RenderJobState.PAUSED,
+            RenderJobState.FINALIZING,
         }
 
     def retry(self) -> "RenderJob":
