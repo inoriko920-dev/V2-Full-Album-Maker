@@ -89,7 +89,7 @@ def capture(output: Path, width: int = 1672, height: int = 941, scale: float = 1
     for asset in index.all():
         for name in asset.collections: cc[name] = cc.get(name, 0) + 1
     context.set_collection_counts(cc)
-    media_index = shell.workspace_stack._index['media']; old = shell.workspace_stack.widget(media_index); shell.workspace_stack.removeWidget(old); old.setParent(None); shell.workspace_stack.insertWidget(media_index, workspace)
+    shell.workspace_registry.register_bundle('media', workspace=workspace)
     context_layout = shell.context.layout()
     for i in range(context_layout.count()):
         widget = context_layout.itemAt(i).widget()

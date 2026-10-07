@@ -155,11 +155,7 @@ def capture(
     shell = FoundationShellWidget(state=state, adapter=adapter)
     home_state = fixture_state(fixture)
     home = HomeWorkspace(state=home_state)
-    home_index = shell.workspace_stack._index["home"]
-    old = shell.workspace_stack.widget(home_index)
-    shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    shell.workspace_stack.insertWidget(home_index, home)
+    shell.workspace_registry.register_bundle("home", workspace=home)
     inspector = HomeInspectorWidget(home_state)
     if fixture == "output-invalid":
         inspector.set_output_warning("Pilih lokasi output yang dapat ditulis.")

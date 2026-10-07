@@ -275,12 +275,15 @@ class WorkspaceStack(QStackedWidget):
         old = self.widget(index)
         if old is widget:
             return old
+        was_current = old is not None and old is self.currentWidget()
         if old is not None:
             self.removeWidget(old)
         self.insertWidget(index, widget)
         # Removing then inserting at the same stable slot restores all canonical
         # indices; only the route's widget identity changes.
         self._index[route] = index
+        if was_current:
+            self.setCurrentIndex(index)
         if old is not None:
             old.setParent(None)
         return old

@@ -131,7 +131,12 @@ def _init(self, *args, **kwargs) -> None:
         self.spectrum_workspace_s08.layer_selected.connect(self._s11_spectrum_layer_selected)
     if hasattr(self, "spectrum_timeline_s08"):
         self.spectrum_timeline_s08.playhead_requested.connect(self._s11_playhead_context)
-    self.foundation_state.workspace_changed.connect(self._s11_workspace_changed)
+    self.foundation_shell.workspace_registry.register_listener(
+        None,
+        self._s11_workspace_changed,
+        name="step11-integration-route",
+        replay=False,
+    )
 
 
 def install_step11_integration_completion() -> None:

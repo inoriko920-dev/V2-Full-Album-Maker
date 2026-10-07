@@ -167,7 +167,9 @@ def test_full_production_window_registers_all_nine_routes_and_render_last() -> N
         assert "template-route" in names
         assert "spectrum-route" in names
         assert "ai-agent-route" in names
-        assert names[-1] == "render-route"
+        assert "render-route" in names
+        assert "step11-integration-route" in names
+        assert names.index("render-route") > names.index("ai-agent-route")
 
         for route in expected:
             window.foundation_shell.set_workspace(route)
