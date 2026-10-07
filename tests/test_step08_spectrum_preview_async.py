@@ -72,3 +72,50 @@ def test_invalidate_prevents_pending_result_from_becoming_current(tmp_path: Path
         time.sleep(0.01)
     assert received == []
     worker.close()
+
+
+def test_close_suppresses_pending_preview_delivery(tmp_path: Path) -> None:
+    app = _app()
+    worker = SpectrumAccuratePreview(
+        cache_root=tmp_path,
+        service_factory=_FakeService,
+        max_workers=1,
+    )
+    received: list[tuple[int, str, str]] = []
+    worker.preview_ready.connect(lambda token, path, status: received.append((token, path, status)))
+
+    doc = ProjectDocument.new_empty("Close STEP08")
+    worker.request(doc, 100)
+    worker.close()
+
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert received == []
+
+
+def test_close_suppresses_deferred_cache_hit_delivery(tmp_path: Path) -> None:
+    app = _app()
+    worker = SpectrumAccuratePreview(
+        cache_root=tmp_path,
+        service_factory=_FakeService,
+        max_workers=1,
+    )
+    received: list[tuple[int, str, str]] = []
+    worker.preview_ready.connect(lambda token, path, status: received.append((token, path, status)))
+
+    doc = ProjectDocument.new_empty("Close cached STEP08")
+    key = worker.cache_key(doc, 200)
+    cached = tmp_path / f"{key}.png"
+    cached.write_bytes(b"cached")
+
+    worker.request(doc, 200)
+    worker.close()
+
+    for _ in range(10):
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert received == []
