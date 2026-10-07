@@ -82,7 +82,7 @@ def _start_import(self,entries,folder):
             key=canonical_path_key(path)
             if key in seen:continue
             seen.add(key); self._s03_bridge.progress.emit({'project':project,'text':f'Membaca {i}/{total}: {Path(path).name}'})
-            try:accepted.append((kind.value,async_mod._probe_one('image' if kind==MediaType.PHOTO else kind.value,path)))
+            try:accepted.append((kind.value,async_mod._probe_one('image' if kind==MediaType.PHOTO else kind.value,path,getattr(self,'_m5_media_probe_service',None))))
             except Exception as exc:errors.append(f'{Path(path).name}: {exc}')
         self._s03_bridge.imported.emit({'project':project,'accepted':accepted,'errors':errors,'canceled':self._s03_cancel.is_set()})
     threading.Thread(target=work,daemon=True,name='fam-step03-import').start()
@@ -132,7 +132,7 @@ def _relink(self,asset_id):
     if media_type_for_path(path)!=a.media_type:QMessageBox.warning(self,'Relink Media','Jenis media pengganti harus sama.');return
     project=self.project
     def work():
-        try:item=async_mod._probe_one('image' if a.media_type==MediaType.PHOTO else a.media_type.value,path);err=''
+        try:item=async_mod._probe_one('image' if a.media_type==MediaType.PHOTO else a.media_type.value,path,getattr(self,'_m5_media_probe_service',None));err=''
         except Exception as exc:item=None;err=str(exc)
         self._s03_bridge.relinked.emit({'project':project,'asset_id':asset_id,'old':a.path,'new':path,'kind':a.media_type.value,'item':item,'error':err})
     threading.Thread(target=work,daemon=True,name='fam-step03-relink').start()

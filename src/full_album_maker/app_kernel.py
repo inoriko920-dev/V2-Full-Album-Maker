@@ -18,6 +18,9 @@ from .feature_parity_registry import (
 )
 from .task_lifecycle import ShutdownReport, TaskSupervisor
 from .project_persistence import DEFAULT_PROJECT_PERSISTENCE, ProjectPersistence
+from .cache_manager import CacheManager, bind_cache_manager
+from .media_probe_service import MediaProbeService, bind_media_probe_service
+from .preview_engine import PreviewEngine, bind_preview_engine
 from .render_engine import RenderEngine, bind_render_engine
 
 
@@ -54,15 +57,18 @@ class LegacyRuntimeAdapter:
 class AppKernel:
     """Application kernel with one central task-lifecycle owner.
 
-    M2 wires TaskSupervisor ownership, M3 ProjectPersistence, and M4 the
-    RenderEngine facade. Legacy implementations remain adapters until their
-    individual parity gates permit retirement.
+    M2 wires TaskSupervisor ownership, M3 ProjectPersistence, M4 RenderEngine,
+    and M5 the probe/preview/cache service facades. Legacy implementations
+    remain adapters until their individual parity gates permit retirement.
     """
 
     runtime: LegacyRuntimeAdapter
     feature_parity: FeatureParityRegistry
     tasks: TaskSupervisor
     persistence: ProjectPersistence
+    media_probe_service: MediaProbeService
+    cache_manager: CacheManager
+    preview_engine: PreviewEngine
     render_engine: RenderEngine
     shutdown_timeout_seconds: float = 1.0
 
@@ -74,10 +80,15 @@ class AppKernel:
         try:
             if "--portable-smoke" in args:
                 return self.runtime.run_portable_smoke()
-            # M4 exposes the AppKernel-owned RenderEngine only while the legacy
-            # production window is constructed/run. RenderAsyncBridge captures
-            # this exact instance, avoiding a second render orchestration owner.
-            with bind_render_engine(self.render_engine):
+            # M4/M5 expose kernel-owned services only while the legacy runtime
+            # is active. Legacy constructors capture these exact instances
+            # before their worker threads start, avoiding a second owner.
+            with (
+                bind_render_engine(self.render_engine),
+                bind_media_probe_service(self.media_probe_service),
+                bind_cache_manager(self.cache_manager),
+                bind_preview_engine(self.preview_engine),
+            ):
                 return self.runtime.run_gui()
         finally:
             # The kernel owns its central task boundary. Existing legacy workers
@@ -90,9 +101,9 @@ class CompositionRoot:
     """Single M1 launch-time wiring location for V2.
 
     M1 bound the proven runtime entrypoints. M2 added TaskSupervisor, M3 added
-    ProjectPersistence, and M4 adds the RenderEngine facade while preserving the
-    proven STEP10 executor/compiler implementation. Later boundaries such as
-    PreviewEngine/CacheManager and WorkspaceRegistry remain deferred.
+    ProjectPersistence, M4 added RenderEngine, and M5 adds MediaProbeService,
+    CacheManager, and PreviewEngine while preserving proven adapters.
+    WorkspaceRegistry and later migration boundaries remain deferred.
     """
 
     def __init__(
@@ -103,6 +114,9 @@ class CompositionRoot:
         feature_parity: FeatureParityRegistry = DEFAULT_FEATURE_PARITY_REGISTRY,
         task_supervisor: TaskSupervisor | None = None,
         project_persistence: ProjectPersistence = DEFAULT_PROJECT_PERSISTENCE,
+        media_probe_service: MediaProbeService | None = None,
+        cache_manager: CacheManager | None = None,
+        preview_engine: PreviewEngine | None = None,
         render_engine: RenderEngine | None = None,
         task_workers: int = 4,
         shutdown_timeout_seconds: float = 1.0,
@@ -118,6 +132,9 @@ class CompositionRoot:
         self._feature_parity = feature_parity
         self._task_supervisor = task_supervisor
         self._project_persistence = project_persistence
+        self._media_probe_service = media_probe_service
+        self._cache_manager = cache_manager
+        self._preview_engine = preview_engine
         self._render_engine = render_engine
         self._task_workers = int(task_workers)
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
@@ -130,11 +147,23 @@ class CompositionRoot:
             portable_smoke_runner=self._portable_smoke_runner,
         )
         tasks = self._task_supervisor or TaskSupervisor(max_workers=self._task_workers)
+        if self._cache_manager is not None:
+            cache_manager = self._cache_manager
+        elif self._preview_engine is not None:
+            cache_manager = self._preview_engine.cache_manager
+        else:
+            cache_manager = CacheManager()
+        preview_engine = self._preview_engine or PreviewEngine(cache_manager=cache_manager)
+        if preview_engine.cache_manager is not cache_manager:
+            raise ValueError("PreviewEngine harus memakai CacheManager milik AppKernel.")
         return AppKernel(
             runtime=runtime,
             feature_parity=self._feature_parity,
             tasks=tasks,
             persistence=self._project_persistence,
+            media_probe_service=self._media_probe_service or MediaProbeService(),
+            cache_manager=cache_manager,
+            preview_engine=preview_engine,
             render_engine=self._render_engine or RenderEngine(),
             shutdown_timeout_seconds=self._shutdown_timeout_seconds,
         )
@@ -147,6 +176,9 @@ def build_app_kernel(
     feature_parity: FeatureParityRegistry = DEFAULT_FEATURE_PARITY_REGISTRY,
     task_supervisor: TaskSupervisor | None = None,
     project_persistence: ProjectPersistence = DEFAULT_PROJECT_PERSISTENCE,
+    media_probe_service: MediaProbeService | None = None,
+    cache_manager: CacheManager | None = None,
+    preview_engine: PreviewEngine | None = None,
     render_engine: RenderEngine | None = None,
     task_workers: int = 4,
     shutdown_timeout_seconds: float = 1.0,
@@ -159,6 +191,9 @@ def build_app_kernel(
         feature_parity=feature_parity,
         task_supervisor=task_supervisor,
         project_persistence=project_persistence,
+        media_probe_service=media_probe_service,
+        cache_manager=cache_manager,
+        preview_engine=preview_engine,
         render_engine=render_engine,
         task_workers=task_workers,
         shutdown_timeout_seconds=shutdown_timeout_seconds,
@@ -167,8 +202,11 @@ def build_app_kernel(
 
 __all__ = [
     "AppKernel",
+    "CacheManager",
     "CompositionRoot",
     "LegacyRuntimeAdapter",
+    "MediaProbeService",
+    "PreviewEngine",
     "ProjectPersistence",
     "RenderEngine",
     "Runner",

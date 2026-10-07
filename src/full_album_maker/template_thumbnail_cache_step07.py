@@ -15,7 +15,8 @@ from PySide6.QtCore import QObject, Signal
 
 from .custom_template_builder import CustomTemplate
 from .editor_models import ProjectDocument
-from .paths import data_dir, ffmpeg_path
+from .cache_manager import DEFAULT_CACHE_MANAGER, current_cache_manager
+from .paths import ffmpeg_path
 from .template_studio_step07 import (
     TemplateStudioDescriptor,
     TemplateStudioDraft,
@@ -140,7 +141,12 @@ class TemplateThumbnailCache(QObject):
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self.root = Path(root) if root is not None else data_dir() / "cache" / "template_thumbnails_v1"
+        self._m5_cache_manager = current_cache_manager() or DEFAULT_CACHE_MANAGER
+        self.root = (
+            Path(root)
+            if root is not None
+            else self._m5_cache_manager.root("template-thumbnail")
+        )
         self.root.mkdir(parents=True, exist_ok=True)
         self._renderer = renderer or render_preview_thumbnail
         self._executor = ThreadPoolExecutor(

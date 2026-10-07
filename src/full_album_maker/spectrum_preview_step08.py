@@ -11,16 +11,15 @@ from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 
 from .editor_models import ProjectDocument
-from .paths import temp_dir
+from .preview_engine import DEFAULT_PREVIEW_ENGINE, current_preview_engine
 from .preview_scene import PreviewCanvas
-from .preview_service import AccuratePreviewService
 from .spectrum_feature import normalize_spectrum_properties
 
 
 class SpectrumPreviewCanvas(PreviewCanvas):
     """Recovered preview canvas with a non-fake Spectrum fallback.
 
-    Real audio-reactive pixels arrive through AccuratePreviewService. While that
+    Real audio-reactive pixels arrive through the M5 PreviewEngine facade. While that
     worker is pending/unavailable, Spectrum renders only a deterministic resting
     geometry. It never animates from playhead math, so silence/missing analysis
     cannot look like fake audio reactivity.
@@ -73,7 +72,7 @@ class SpectrumPreviewCanvas(PreviewCanvas):
                 )
 
 
-PreviewServiceFactory = Callable[[], AccuratePreviewService]
+PreviewServiceFactory = Callable[[], object]
 
 
 class SpectrumAccuratePreview(QObject):
@@ -88,13 +87,14 @@ class SpectrumAccuratePreview(QObject):
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
+        self._m5_preview_engine = current_preview_engine() or DEFAULT_PREVIEW_ENGINE
         self.cache_root = (
             Path(cache_root)
             if cache_root is not None
-            else temp_dir() / "spectrum-preview-step08-v1"
+            else self._m5_preview_engine.cache_root("spectrum-preview")
         )
         self.cache_root.mkdir(parents=True, exist_ok=True)
-        self._service_factory = service_factory or AccuratePreviewService
+        self._service_factory = service_factory or (lambda: self._m5_preview_engine)
         self._executor = ThreadPoolExecutor(
             max_workers=max(1, int(max_workers)),
             thread_name_prefix="fam-spectrum-preview",

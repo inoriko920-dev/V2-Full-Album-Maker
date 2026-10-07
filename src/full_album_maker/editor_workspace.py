@@ -31,7 +31,7 @@ from .playlist_commands import MoveSong, RemoveSong
 from .playlist_editor import PlaylistPanel
 from .playlist_service_v2 import PlaylistServiceV2
 from .preview_scene import PreviewCanvas
-from .preview_service import AccuratePreviewService
+from .preview_engine import DEFAULT_PREVIEW_ENGINE, current_preview_engine
 from .project_persistence import DEFAULT_PROJECT_PERSISTENCE
 from .property_inspector import PropertyInspector
 from .render_service_v2 import EditorRenderService
@@ -499,10 +499,11 @@ class EditorWorkspace(QWidget):
         snapshot = self.session.snapshot()
         tick = self.session.playhead_tick
         target = temp_dir() / f"preview-v2-{snapshot.project_id}.png"
+        preview_engine = current_preview_engine() or DEFAULT_PREVIEW_ENGINE
 
         def worker() -> None:
             try:
-                result = AccuratePreviewService().render_frame(snapshot, tick, target)
+                result = preview_engine.render_frame(snapshot, tick, target)
                 self.bridge.previewReady.emit(result)
             except Exception as exc:
                 self.bridge.error.emit(f"Preview akurat gagal: {exc}")

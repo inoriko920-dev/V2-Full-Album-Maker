@@ -11,7 +11,8 @@ from PySide6.QtWidgets import QMenu, QPushButton, QSizePolicy
 from .foundation_components import FAMButton
 from .foundation_tokens import TOKENS
 from .media_library_services import MediaSidecarStore
-from .media_preview_cache import MediaPreviewCache, PreviewResult, invalidate_source, preview_cache_path
+from .media_preview_cache import PreviewResult
+from .preview_engine import DEFAULT_PREVIEW_ENGINE, current_preview_engine
 from .media_workspace import COLLECTIONS, MediaPreviewPlaceholder, MediaWorkspace, MediaInspectorWidget
 
 _installed = False
@@ -343,7 +344,11 @@ def _window_init(self, *args, **kwargs) -> None:
     _originals["window_init"](self, *args, **kwargs)
     self._s03_preview_project_identity = id(self.project)
     self._s03_preview_jobs = 0
-    self._s03_preview_cache = MediaPreviewCache(self, workers=2)
+    self._m5_preview_engine = current_preview_engine() or DEFAULT_PREVIEW_ENGINE
+    self._s03_preview_cache = self._m5_preview_engine.new_media_preview_cache(
+        self,
+        workers=2,
+    )
     self._s03_preview_cache.preview_ready.connect(self._s03_completion_preview_ready)
     self._s03_preview_cache.jobs_changed.connect(self._s03_completion_preview_jobs)
     self.media_workspace._step03_preview_requester = self._s03_preview_cache.request
@@ -451,7 +456,7 @@ def _select(self, ids) -> None:
     if asset is not None:
         path = self.media_workspace._step03_preview_paths.get(asset.asset_id, "")
         if not path:
-            candidate = preview_cache_path(asset)
+            candidate = self._m5_preview_engine.media_preview_path(asset)
             path = str(candidate) if candidate.is_file() else ""
         if path:
             self.media_inspector.set_preview_path(asset.asset_id, path)
@@ -473,7 +478,7 @@ def _refresh_media(self, reset=False) -> None:
 def _relinked(self, payload) -> None:
     old_path = str(payload.get("old", "")) if isinstance(payload, dict) else ""
     if old_path:
-        invalidate_source(old_path)
+        self._m5_preview_engine.invalidate_media_source(old_path)
     _originals["relinked"](self, payload)
     if hasattr(self, "_s03_preview_cache"):
         self._s03_preview_cache.reset()

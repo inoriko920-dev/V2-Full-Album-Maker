@@ -9,7 +9,11 @@ from PySide6.QtWidgets import QFileDialog
 
 from . import ui as ui_module
 from . import visual_feature as visual_feature_module
-from .media import MediaProbeError, probe_duration
+from .media_probe_service import (
+    DEFAULT_MEDIA_PROBE_SERVICE,
+    MediaProbeService,
+    current_media_probe_service,
+)
 from .project import MediaItem
 
 _installed = False
@@ -39,25 +43,32 @@ def _target_paths(window, kind: str) -> set[str]:
     return {_path_key(item.path) for item in items}
 
 
-def _probe_one(kind: str, path: str) -> MediaItem:
+def _probe_one(
+    kind: str,
+    path: str,
+    service: MediaProbeService | None = None,
+) -> MediaItem:
+    probe_service = service or current_media_probe_service() or DEFAULT_MEDIA_PROBE_SERVICE
+    result = probe_service.probe(path, kind)
+
     if kind == "video":
-        return MediaItem(path=path, duration=probe_duration(path, "video"))
+        return MediaItem(path=path, duration=float(result.duration_seconds or 0.0))
 
     if kind == "audio":
-        item = MediaItem(path=path, duration=probe_duration(path, "audio"))
-        title, artist = visual_feature_module.probe_audio_tags(path)
-        if title:
-            setattr(item, "display_title", title)
-        if artist:
-            setattr(item, "display_artist", artist)
+        item = MediaItem(path=path, duration=float(result.duration_seconds or 0.0))
+        if result.title:
+            setattr(item, "display_title", result.title)
+        if result.artist:
+            setattr(item, "display_artist", result.artist)
         setattr(item, "metadata_probed", True)
         return item
 
     if kind == "image":
-        info = visual_feature_module.probe_image(path)
         item = MediaItem(path=path, duration=0.0)
-        setattr(item, "width", int(info["width"]))
-        setattr(item, "height", int(info["height"]))
+        if result.width is not None:
+            setattr(item, "width", int(result.width))
+        if result.height is not None:
+            setattr(item, "height", int(result.height))
         return item
 
     raise ValueError(f"Jenis media tidak dikenal: {kind}")
@@ -88,6 +99,11 @@ def _start_import(window, kind: str, paths: list[str]) -> None:
         return
 
     project_ref = window.project
+    probe_service = (
+        getattr(window, "_m5_media_probe_service", None)
+        or current_media_probe_service()
+        or DEFAULT_MEDIA_PROBE_SERVICE
+    )
     window._import_job_count += 1
     window.log.appendPlainText(
         f"Impor {kind} dimulai di background: {len(selected)} file. UI tetap dapat digunakan."
@@ -99,8 +115,8 @@ def _start_import(window, kind: str, paths: list[str]) -> None:
         try:
             for path in selected:
                 try:
-                    items.append(_probe_one(kind, path))
-                except (MediaProbeError, ValueError, OSError) as exc:
+                    items.append(_probe_one(kind, path, probe_service))
+                except (ValueError, OSError) as exc:
                     errors.append(str(exc))
                 except Exception as exc:  # defensive boundary around codec/decoder tools
                     errors.append(f"Gagal membaca {Path(path).name}: {exc}")
@@ -181,6 +197,9 @@ def _finish_import(self, payload: dict[str, Any]) -> None:
 
 
 def _patched_init(self, *args, **kwargs) -> None:
+    self._m5_media_probe_service = (
+        current_media_probe_service() or DEFAULT_MEDIA_PROBE_SERVICE
+    )
     self._import_pending_keys: set[str] = set()
     self._import_job_count = 0
     # Keep the bridge un-parented. If the window closes while a daemon import

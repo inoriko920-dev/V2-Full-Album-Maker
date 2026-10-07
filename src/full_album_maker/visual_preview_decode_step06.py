@@ -6,7 +6,8 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
 
 from .media_library_model import MediaAsset as LibraryAsset, MediaStatus, MediaType
-from .media_preview_cache import MediaPreviewCache, PreviewResult
+from .media_preview_cache import PreviewResult
+from .preview_engine import DEFAULT_PREVIEW_ENGINE, current_preview_engine
 from .visual_assignment import assignment_status
 from .visual_precision import visual_settings_for_song
 from .visual_workspace_step06 import (
@@ -110,7 +111,11 @@ class DecodedVisualPreviewWorkspace(VisualPreviewWorkspace):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.preview_cache = MediaPreviewCache(self, workers=1)
+        self._m5_preview_engine = current_preview_engine() or DEFAULT_PREVIEW_ENGINE
+        self.preview_cache = self._m5_preview_engine.new_media_preview_cache(
+            self,
+            workers=1,
+        )
         self.preview_cache.preview_ready.connect(self._preview_ready)
         self._requested_asset_id = ""
         self._requested_generation = self.preview_cache.generation

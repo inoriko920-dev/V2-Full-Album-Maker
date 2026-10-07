@@ -13,12 +13,13 @@ from typing import Callable
 from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QImageReader
 
+from .cache_manager import CacheManager, DEFAULT_CACHE_MANAGER, current_cache_manager
 from .media_library_model import MediaAsset, MediaStatus, MediaType
 from .media_library_services import canonical_path_key
-from .paths import data_dir, ffmpeg_path
+from .paths import ffmpeg_path
 
 
-CACHE_VERSION = 1
+CACHE_VERSION = DEFAULT_CACHE_MANAGER.version("media-preview")
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
 
@@ -31,7 +32,7 @@ class PreviewResult:
     generation: int = 0
 
 
-def _source_fingerprint(asset: MediaAsset) -> str:
+def _source_fingerprint(asset: MediaAsset, cache_version: int = CACHE_VERSION) -> str:
     source = Path(asset.path)
     try:
         stat = source.stat()
@@ -41,30 +42,39 @@ def _source_fingerprint(asset: MediaAsset) -> str:
         size = -1
         mtime_ns = -1
     raw = (
-        f"v{CACHE_VERSION}\0{asset.media_type.value}\0"
+        f"v{max(1, int(cache_version))}\0{asset.media_type.value}\0"
         f"{canonical_path_key(asset.path)}\0{size}\0{mtime_ns}\0"
         f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}"
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _cache_root() -> Path:
-    root = data_dir() / "cache" / "media-previews"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+def _cache_root(cache_manager: CacheManager | None = None) -> Path:
+    manager = cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
+    return manager.root("media-preview")
 
 
-def preview_cache_path(asset: MediaAsset) -> Path:
-    return _cache_root() / f"{_source_fingerprint(asset)}.png"
+def preview_cache_path(
+    asset: MediaAsset,
+    *,
+    cache_manager: CacheManager | None = None,
+) -> Path:
+    manager = cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
+    version = manager.version("media-preview")
+    return _cache_root(manager) / f"{_source_fingerprint(asset, version)}.png"
 
 
 def _metadata_path(cache_path: Path) -> Path:
     return cache_path.with_suffix(".json")
 
 
-def _write_metadata(cache_path: Path, asset: MediaAsset) -> None:
+def _write_metadata(
+    cache_path: Path,
+    asset: MediaAsset,
+    cache_manager: CacheManager,
+) -> None:
     payload = {
-        "version": CACHE_VERSION,
+        "version": cache_manager.version("media-preview"),
         "asset_id": asset.asset_id,
         "source_key": canonical_path_key(asset.path),
         "media_type": asset.media_type.value,
@@ -79,6 +89,33 @@ def _write_metadata(cache_path: Path, asset: MediaAsset) -> None:
 def _atomic_replace_png(temp_path: Path, final_path: Path) -> None:
     final_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path.replace(final_path)
+
+
+def _usable_cached_preview(
+    target: Path,
+    asset: MediaAsset,
+    cache_manager: CacheManager,
+) -> bool:
+    metadata = _metadata_path(target)
+    if not cache_manager.entry_usable(target) or not cache_manager.entry_usable(metadata):
+        cache_manager.evict("media-preview", target, metadata)
+        return False
+    try:
+        payload = json.loads(metadata.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        cache_manager.evict("media-preview", target, metadata)
+        return False
+    expected = {
+        "version": cache_manager.version("media-preview"),
+        "asset_id": asset.asset_id,
+        "source_key": canonical_path_key(asset.path),
+        "media_type": asset.media_type.value,
+        "preview": target.name,
+    }
+    if any(payload.get(key) != value for key, value in expected.items()):
+        cache_manager.evict("media-preview", target, metadata)
+        return False
+    return True
 
 
 def _generate_photo(source: Path, target: Path) -> None:
@@ -146,7 +183,11 @@ def _generate_audio(source: Path, target: Path) -> None:
     )
 
 
-def generate_preview(asset: MediaAsset) -> str:
+def generate_preview(
+    asset: MediaAsset,
+    *,
+    cache_manager: CacheManager | None = None,
+) -> str:
     """Build or reuse one disposable cached preview.
 
     Cache identity includes path, media type, file size, and mtime. A changed or
@@ -158,8 +199,9 @@ def generate_preview(asset: MediaAsset) -> str:
     source = Path(asset.path)
     if not source.is_file():
         raise FileNotFoundError(asset.path)
-    target = preview_cache_path(asset)
-    if target.is_file() and target.stat().st_size > 0:
+    manager = cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
+    target = preview_cache_path(asset, cache_manager=manager)
+    if _usable_cached_preview(target, asset, manager):
         return str(target)
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -179,15 +221,20 @@ def generate_preview(asset: MediaAsset) -> str:
         if not temp_path.is_file() or temp_path.stat().st_size <= 0:
             raise RuntimeError("Preview cache kosong")
         _atomic_replace_png(temp_path, target)
-        _write_metadata(target, asset)
+        _write_metadata(target, asset, manager)
         return str(target)
     finally:
         temp_path.unlink(missing_ok=True)
 
 
-def invalidate_source(path: str | Path) -> int:
+def invalidate_source(
+    path: str | Path,
+    *,
+    cache_manager: CacheManager | None = None,
+) -> int:
     """Remove disposable cache entries that belong to one source path."""
-    root = _cache_root()
+    manager = cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
+    root = _cache_root(manager)
     source_key = canonical_path_key(path)
     removed = 0
     for metadata in root.glob("*.json"):
@@ -198,14 +245,7 @@ def invalidate_source(path: str | Path) -> int:
         if payload.get("source_key") != source_key:
             continue
         preview = root / str(payload.get("preview") or metadata.with_suffix(".png").name)
-        for candidate in (preview, metadata):
-            try:
-                candidate.unlink()
-                removed += 1
-            except FileNotFoundError:
-                pass
-            except OSError:
-                pass
+        removed += manager.evict("media-preview", preview, metadata)
     return removed
 
 
@@ -215,8 +255,17 @@ class MediaPreviewCache(QObject):
     preview_ready = Signal(object)
     jobs_changed = Signal(int)
 
-    def __init__(self, parent=None, *, workers: int = 2) -> None:
+    def __init__(
+        self,
+        parent=None,
+        *,
+        workers: int = 2,
+        cache_manager: CacheManager | None = None,
+    ) -> None:
         super().__init__(parent)
+        self.cache_manager = (
+            cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
+        )
         self._queue: queue.Queue[tuple[int, MediaAsset] | None] = queue.Queue()
         self._lock = threading.Lock()
         self._pending: set[tuple[int, str]] = set()
@@ -249,8 +298,8 @@ class MediaPreviewCache(QObject):
     def request(self, asset: MediaAsset) -> bool:
         if asset.status == MediaStatus.MISSING:
             return False
-        target = preview_cache_path(asset)
-        if target.is_file() and target.stat().st_size > 0:
+        target = preview_cache_path(asset, cache_manager=self.cache_manager)
+        if _usable_cached_preview(target, asset, self.cache_manager):
             self.preview_ready.emit(
                 PreviewResult(asset_id=asset.asset_id, path=str(target), generation=self.generation)
             )
@@ -274,7 +323,7 @@ class MediaPreviewCache(QObject):
                 return
             generation, asset = job
             try:
-                path = generate_preview(asset)
+                path = generate_preview(asset, cache_manager=self.cache_manager)
                 error = ""
             except Exception as exc:
                 path = ""
