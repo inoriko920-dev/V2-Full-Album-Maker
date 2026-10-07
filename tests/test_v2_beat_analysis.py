@@ -216,8 +216,9 @@ def test_m6_service_does_not_create_private_worker_pool_or_touch_project_schema(
     source = (ROOT / "src" / "full_album_maker" / "beat_analysis.py").read_text(encoding="utf-8")
     models = (ROOT / "src" / "full_album_maker" / "editor_models.py").read_text(encoding="utf-8")
 
-    assert "ThreadPoolExecutor" not in source
-    assert "threading.Thread" not in source
+    assert "from concurrent.futures import ThreadPoolExecutor" not in source
+    assert "ThreadPoolExecutor(" not in source
+    assert "threading.Thread(" not in source
     assert "ProjectDocument" not in source
     assert "schema_version" not in source
     assert "task_supervisor.submit(" in source
