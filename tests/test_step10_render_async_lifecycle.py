@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
+import sys
+import textwrap
 import threading
 import time
 
@@ -160,3 +163,40 @@ def test_preflight_after_close_is_invalidated_without_executor_error(tmp_path: P
     assert token >= 1
     assert emitted == []
     assert engine.preflight_calls == 0
+
+
+def test_accepted_window_close_closes_render_bridge() -> None:
+    script = textwrap.dedent(
+        r"""
+        import os
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        os.environ["FAM_STEP11_NO_RECOVERY_PROMPT"] = "1"
+        os.environ["FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER"] = "1"
+        os.environ["FAM_STEP09_PROVIDER"] = "mock"
+
+        from PySide6.QtWidgets import QApplication
+        import full_album_maker.main
+        from full_album_maker.v14_window import create_main_window
+
+        app = QApplication.instance() or QApplication([])
+        window = create_main_window()
+        assert window._s10_async.closed is False
+        assert bool(window.close()) is True
+        app.processEvents()
+        assert window._s10_async.closed is True
+        os._exit(0)
+        """
+    )
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["FAM_STEP11_NO_RECOVERY_PROMPT"] = "1"
+    env["FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER"] = "1"
+    env["FAM_STEP09_PROVIDER"] = "mock"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=45,
+    )
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
