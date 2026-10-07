@@ -19,7 +19,13 @@ from .render_center_model_step10 import (
     RenderMetrics,
     RenderSettings,
 )
-from .render_preflight_step10 import FFmpegCapability, PreflightReport, run_preflight
+from .render_preflight_step10 import (
+    FFmpegCapability,
+    PreflightReport,
+    capture_required_media_identities,
+    runtime_media_identity_issues,
+    run_preflight,
+)
 from .spectrum_render_step08 import Step08FFmpegCompiler
 
 
@@ -29,6 +35,31 @@ class Step10RenderError(RuntimeError):
 
 class Step10RenderCancelled(Step10RenderError):
     pass
+
+
+class Step10SourceChangedError(Step10RenderError):
+    pass
+
+
+class _CombinedEvent:
+    """Small Event-compatible OR view used by the existing FFmpeg watchdog."""
+
+    def __init__(self, *events) -> None:
+        self._events = tuple(event for event in events if event is not None)
+
+    def is_set(self) -> bool:
+        return any(event.is_set() for event in self._events)
+
+    def wait(self, timeout: float | None = None) -> bool:
+        if self.is_set():
+            return True
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        while True:
+            if self.is_set():
+                return True
+            if deadline is not None and time.monotonic() >= deadline:
+                return False
+            time.sleep(0.02)
 
 
 @dataclass(frozen=True)
@@ -579,6 +610,13 @@ class RenderExecutor:
             staged.unlink(missing_ok=True)
 
             document = apply_settings_to_snapshot(job, preflight.encoder.encoder)
+            try:
+                source_baseline = capture_required_media_identities(document)
+            except (OSError, FileNotFoundError) as exc:
+                raise Step10SourceChangedError(
+                    f"Source media berubah/hilang setelah preflight: {exc}"
+                ) from exc
+
             with tempfile.TemporaryDirectory(
                 prefix=f".{final.stem}.{job.attempt_id[:8]}.work-",
                 dir=final.parent,
@@ -592,6 +630,13 @@ class RenderExecutor:
                     preflight.encoder.encoder,
                 )
                 args = add_progress_protocol(args)
+                pre_run_issues = runtime_media_identity_issues(source_baseline)
+                if pre_run_issues:
+                    raise Step10SourceChangedError(
+                        "Source media berubah setelah preflight, sebelum FFmpeg: "
+                        + ", ".join(pre_run_issues[:8])
+                    )
+
                 job.transition(RenderJobState.RUNNING)
 
                 def metrics(value: RenderMetrics) -> None:
@@ -599,15 +644,55 @@ class RenderExecutor:
                     if on_metrics:
                         on_metrics(value)
 
-                self.runner.run(
-                    args,
-                    duration_seconds=(
-                        job.snapshot.duration_tick / max(1, job.snapshot.timebase)
-                    ),
-                    cancel_event=cancel_event,
-                    on_metrics=metrics,
-                    on_log=lambda line: self._record_log(job, line, on_log),
+                source_changed = threading.Event()
+                source_watch_stop = threading.Event()
+                source_reason: list[str] = []
+
+                def watch_sources() -> None:
+                    while not source_watch_stop.wait(0.10):
+                        issues = runtime_media_identity_issues(source_baseline)
+                        if not issues:
+                            continue
+                        source_reason[:] = list(issues)
+                        source_changed.set()
+                        return
+
+                source_thread = threading.Thread(
+                    target=watch_sources,
+                    name="fam-render-source-watchdog",
+                    daemon=True,
                 )
+                source_thread.start()
+                effective_cancel = _CombinedEvent(cancel_event, source_changed)
+                try:
+                    self.runner.run(
+                        args,
+                        duration_seconds=(
+                            job.snapshot.duration_tick / max(1, job.snapshot.timebase)
+                        ),
+                        cancel_event=effective_cancel,
+                        on_metrics=metrics,
+                        on_log=lambda line: self._record_log(job, line, on_log),
+                    )
+                except Step10RenderCancelled as exc:
+                    if source_changed.is_set() and not (
+                        cancel_event is not None and cancel_event.is_set()
+                    ):
+                        raise Step10SourceChangedError(
+                            "Source media berubah saat FFmpeg berjalan: "
+                            + ", ".join(source_reason[:8] or ["identity-changed"])
+                        ) from exc
+                    raise
+                finally:
+                    source_watch_stop.set()
+                    source_thread.join(timeout=1.0)
+
+                post_run_issues = runtime_media_identity_issues(source_baseline)
+                if post_run_issues:
+                    raise Step10SourceChangedError(
+                        "Source media berubah selama render: "
+                        + ", ".join(post_run_issues[:8])
+                    )
 
             if cancel_event is not None and cancel_event.is_set():
                 raise Step10RenderCancelled(
@@ -633,6 +718,12 @@ class RenderExecutor:
                 raise Step10RenderCancelled(
                     "Render dibatalkan setelah verifikasi, sebelum publish final."
                 )
+            final_source_issues = runtime_media_identity_issues(source_baseline)
+            if final_source_issues:
+                raise Step10SourceChangedError(
+                    "Source media berubah sebelum publish final: "
+                    + ", ".join(final_source_issues[:8])
+                )
 
             publish_bundle_transactional([(staged, final)])
             staged = None
@@ -653,6 +744,16 @@ class RenderExecutor:
                 verification=verification,
                 preflight=preflight,
             )
+        except Step10SourceChangedError as exc:
+            job.error_code = "SOURCE_CHANGED_DURING_RENDER"
+            job.error_message = sanitize_render_log(str(exc))
+            if job.state in {
+                RenderJobState.STARTING,
+                RenderJobState.RUNNING,
+                RenderJobState.FINALIZING,
+            }:
+                job.transition(RenderJobState.FAILED)
+            raise
         except Step10RenderCancelled as exc:
             job.error_code = "CANCELLED"
             job.error_message = sanitize_render_log(str(exc))

@@ -201,7 +201,9 @@ def generate_preview(
     if not source.is_file():
         raise FileNotFoundError(asset.path)
     manager = cache_manager or current_cache_manager() or DEFAULT_CACHE_MANAGER
-    target = preview_cache_path(asset, cache_manager=manager)
+    version = manager.version("media-preview")
+    baseline_fingerprint = _source_fingerprint(asset, version)
+    target = _cache_root(manager) / f"{baseline_fingerprint}.png"
     if _usable_cached_preview(target, asset, manager):
         return str(target)
 
@@ -221,8 +223,17 @@ def generate_preview(
             _generate_audio(source, temp_path)
         if not temp_path.is_file() or temp_path.stat().st_size <= 0:
             raise RuntimeError("Preview cache kosong")
+        if _source_fingerprint(asset, version) != baseline_fingerprint:
+            raise RuntimeError(
+                "Source media berubah saat preview dibuat; cache dibatalkan."
+            )
         _atomic_replace_png(temp_path, target)
         _write_metadata(target, asset, manager)
+        if _source_fingerprint(asset, version) != baseline_fingerprint:
+            manager.evict("media-preview", target, _metadata_path(target))
+            raise RuntimeError(
+                "Source media berubah sebelum preview cache dipublikasikan."
+            )
         return str(target)
     finally:
         temp_path.unlink(missing_ok=True)
