@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M8 LEGACY BRIDGE RETIREMENT
+IMPLEMENTATION — M9 CONSOLIDATION
 
 ## Current STEP
-M8 — Legacy Bridge Retirement — PASS
+M9 — Consolidation — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M8 — Legacy Bridge Retirement — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, M3, M4, M5, M6, M7, and M8 are implemented and validated.
+M0/T1, M1, M2, M3, M4, M5, M6, M7, M8, and M9 are implemented and validated.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -120,14 +120,26 @@ M8 result:
 
 Validated candidate `006d64eff4a0793162cb759a8cd77476a1a9c704` on Actions run `37598817830`: Q0 compile PASS; 68 M0–M8 contract tests passed (4 skipped); 8 retired-bridge parity tests passed; 42 nine-route UI tests passed; 25 production navigation/persistence/render/preview tests passed (2 skipped); 28 responsive/lifecycle tests passed; 2 long-album structural stress tests passed; real-FFmpeg M8 job PASS with 3 tests.
 
+M9 result:
+- added one explicit `ProductionRuntimeInstaller` and exact 27-installer manifest as the single owner of the surviving compatibility/presentation bootstrap order;
+- `main.py` no longer imports/calls individual production installers and now invokes one `install_production_runtime()` boundary before the lazy v14 GUI import;
+- exact installer order remains unchanged from the M8 production chain;
+- installer completion is tracked per entry so repeated successful calls are idempotent and same-process retry after a partial failure resumes from the first incomplete installer;
+- M8-retained production bridges remain present because they still own real behavior;
+- ProjectDocument schema v2, TIMEBASE=240000, all nine routes, M2–M8 service ownership, render compiler semantics, UI design, dependencies, and release behavior remain unchanged;
+- STEP 03 architecture migration sequence M0–M9 is now fully implemented and gate-protected;
+- Q2/Q3/Q4/Q5 quality/release promotion was not started.
+
+Validated candidate `4a9a4b2f91b0dd81b749d02fd356c00d6b14b817` on Actions run `37600034073`: Q0 compile PASS; 73 M0–M9 contract tests passed (4 skipped); 13 bootstrap/retirement parity tests passed; 42 nine-route UI tests passed; 25 production navigation/persistence/render/preview tests passed (2 skipped); 29 responsive/lifecycle/entrypoint tests passed; 2 long-album structural stress tests passed; real-FFmpeg M9 job PASS with 3 tests.
+
 ## Next Operational Step
-M8 is PASS. On the next explicit implementation turn:
-1. Start **M9 — Consolidation** only.
-2. Re-read STEP 03 consolidation order plus M8 retirement evidence before combining or simplifying surviving runtime paths.
-3. Consolidate only already-proven ownership boundaries; do not redesign the UI, project schema, or release model.
-4. Preserve ProjectDocument/EditorSession authority, all nine routes, and M2–M8 gate evidence.
-5. Run focused ownership, production navigation, persistence, render/preview, UI, lifecycle, and stress evidence before reporting M9 PASS.
-6. Do not begin Windows Q4/Q5 release work in the same turn unless the documented implementation sequence explicitly reaches that gate and the user separately continues.
+M9 is PASS and the STEP 03 M0–M9 architecture migration sequence is complete. On the next explicit turn:
+1. Start **Q2 — Integration Quality Gate** from STEP 10 only.
+2. Run the full pytest regression floor plus cross-workspace/session/lifecycle integration evidence.
+3. Do not change architecture merely to make Q2 pass; fix only demonstrated regressions.
+4. Preserve all M0–M9 ownership boundaries and frozen schema/UI/compiler contracts.
+5. Report Q2 PASS/FAIL with exact evidence before proceeding to Q3 Infrastructure.
+6. Do not start Windows Q4 artifact build or Q5 release publication in the same turn.
 
 ## Canonical References
 - MASTER planning DOCX.

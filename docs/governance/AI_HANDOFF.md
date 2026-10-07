@@ -69,7 +69,7 @@ Verified evidence:
 5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
 6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
 
-Implementation is active. M0/T1 through M8 are completed and gate-protected.
+Implementation is active. M0/T1 through M9 are completed and gate-protected. The STEP 03 architecture migration sequence is complete.
 
 ## M0/T1 Implementation Result — PASS
 - Branch: `impl-m0-t1-feature-parity`
@@ -172,12 +172,25 @@ Implementation is active. M0/T1 through M8 are completed and gate-protected.
 - GitHub Actions run `37598817830`: 68 M0–M8 contracts passed (4 skipped), 8 retirement-parity tests passed, 42 nine-route UI tests passed, 25 production navigation/persistence/render/preview tests passed (2 skipped), 28 responsive/lifecycle tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M8 job PASS with 3 tests.
 - Detailed records: `docs/implementation/M8_LEGACY_BRIDGE_RETIREMENT.md` and `docs/implementation/M8_EVIDENCE.md`.
 
+## M9 Implementation Result — PASS
+- Branch: `impl-m9-consolidation`
+- Added `ProductionRuntimeInstaller` as the single ordered owner of the surviving production compatibility/presentation bootstrap.
+- The exact 27-installer order from M8 is preserved and test-frozen.
+- `main.py` now calls one `install_production_runtime()` boundary before the lazy v14 GUI import instead of wiring every installer independently.
+- Repeated successful installation is idempotent; partial-failure retry resumes at the first incomplete installer without replaying completed global patches.
+- M8-retained bridges remain because their production behavior is still unreplaced.
+- No compiler rewrite, UI redesign, schema bump, dependency, Windows build, version bump, or release publication was performed.
+- STEP 03 M0–M9 architecture migration is now complete.
+- GitHub Actions run `37600034073`: 73 M0–M9 contracts passed (4 skipped), 13 bootstrap/retirement parity tests passed, 42 nine-route UI tests passed, 25 production navigation/persistence/render/preview tests passed (2 skipped), 29 responsive/lifecycle/entrypoint tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M9 job PASS with 3 tests.
+- Detailed records: `docs/implementation/M9_CONSOLIDATION.md` and `docs/implementation/M9_EVIDENCE.md`.
+
 ## Next Work
-- M9: Consolidation only.
-- Re-read STEP 03 consolidation order and M8 retirement evidence before simplifying surviving runtime paths.
-- Consolidate only boundaries with proven replacement ownership; do not turn M9 into UI/schema/release redesign.
-- Preserve all nine routes, ProjectDocument/EditorSession authority, and M2–M8 service/gate evidence.
-- Do not start Windows Q4/Q5 release work until M9 itself reaches PASS and the documented release sequence is explicitly continued.
+- Q2 Integration Quality Gate only.
+- Run the STEP 10 full regression floor and cross-workspace/session/lifecycle integration evidence.
+- Preserve the complete M0–M9 ownership model; do not redesign architecture to bless a failing test.
+- Fix only demonstrated regressions and keep UI/schema/compiler contracts frozen.
+- Do not proceed to Q3 Infrastructure until Q2 PASS.
+- Do not start Q4 Windows artifact or Q5 stable release work yet.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -192,4 +205,6 @@ Implementation is active. M0/T1 through M8 are completed and gate-protected.
 - M6 BeatAnalysisService: PASS
 - M7 WorkspaceRegistry: PASS
 - M8 Legacy Bridge Retirement: PASS
-- Next operational action: M9 Consolidation only; then report gate before release-quality work.
+- M9 Consolidation: PASS
+- STEP 03 M0–M9 architecture migration: COMPLETE
+- Next operational action: Q2 Integration Quality Gate only; then report gate before Q3.
