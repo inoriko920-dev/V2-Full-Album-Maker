@@ -1,6 +1,6 @@
 # M4 — RenderEngine Facade
 
-Status: **IMPLEMENTED — validation pending**
+Status: **PASS — implemented and validated**
 
 ## Scope
 
@@ -113,7 +113,26 @@ M4 may be marked PASS only after:
    directly constructing RenderExecutor;
 7. no M5/M6/M7/UI redesign scope appears in the branch diff.
 
+## Validation Evidence
+
+Validated implementation candidate:
+- commit: `5f7a428945102f08197bdbe91d7036fbff91c750`
+- GitHub Actions run: `37591981581`
+- `m4-render-facade`: SUCCESS
+- Q0 compile: PASS
+- M0–M4 + entrypoint contracts: **43 passed, 1 skipped**
+- STEP10 render parity: **38 passed**
+- render safety/lifecycle: **21 passed, 9 skipped**
+- 200-song/~3-hour structural stress: **2 passed**
+- production canonical Save: **1 passed**
+- nine-workspace read-only launch characterization: **1 passed**
+- `real-ffmpeg-m4`: SUCCESS, **2 passed**
+- real FFmpeg path executed through `RenderEngine` and retained ffprobe-before-publish behavior.
+
+The evidence/status-only commit after this candidate does not change runtime code.
+The same branch workflow must remain green on the final branch head.
+
 ## Next
 
-After M4 PASS, the next allowed migration phase is **M5 — Probe / Preview /
-Cache**. M5 must not start in the same turn.
+M4 is PASS. The next allowed migration phase is **M5 — Probe / Preview /
+Cache**. M5 was not started in this turn.

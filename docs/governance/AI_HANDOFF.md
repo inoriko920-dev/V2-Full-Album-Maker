@@ -25,7 +25,7 @@ Before doing any work:
 - ProjectDocument + EditorController/EditorSession remain authoritative.
 - Legacy Project is compatibility only and must not regain ownership.
 - FFmpeg/ffprobe remain canonical render/probe infrastructure.
-- Current production compiler semantics remain Step08 -> V13 -> S11 -> FFmpegV2 until facade parity is proven.
+- Current production compiler semantics remain Step08 -> V13 -> S11 -> FFmpegV2; M4 facade parity is proven, but compiler consolidation remains deferred until a later approved cleanup gate.
 - Manual/offline editing and rendering remain first-class.
 - AI remains optional, sanitized, fail-closed, and locally executed through validated commands.
 - Save/output publication remains atomic/transactional and recovery remains separate.
@@ -69,7 +69,7 @@ Verified evidence:
 5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
 6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
 
-Implementation is now allowed, but has **not started yet**.
+Implementation is active. M0/T1 through M4 are completed and gate-protected.
 
 ## M0/T1 Implementation Result — PASS
 - Branch: `impl-m0-t1-feature-parity`
@@ -110,11 +110,20 @@ Implementation is now allowed, but has **not started yet**.
 - Legacy v1 migration IDs are deterministic from canonical payload.
 - GitHub Actions run `37588571955`: 37 M0–M3 contracts PASS, 8 baseline persistence tests PASS, 14 STEP11 persistence lifecycle/core tests PASS, production canonical Save PASS, nine-workspace characterization PASS.
 
+## M4 Implementation Result — PASS
+- Branch: `impl-m4-render-facade`
+- Added AppKernel-owned `RenderEngine` as the canonical preflight/final-render facade.
+- Production `RenderAsyncBridge` routes preflight and execution through RenderEngine and no longer directly constructs RenderExecutor.
+- The existing STEP10 RenderExecutor remains the proven adapter; Step08 -> V13 -> S11 -> FFmpegV2 remains unchanged.
+- Critical preflight, immutable snapshot, AUTO hardware runtime verification/software fallback, progress/cancel, ffprobe verification, and transactional publication are preserved.
+- H3 ProcessSupervisor was not silently introduced; existing STEP10 process ownership remains in place.
+- GitHub Actions run `37591981581`: 43 M0–M4/entrypoint tests passed (1 skipped), 38 STEP10 render parity tests passed, 21 render safety/lifecycle tests passed (9 skipped), 2 long-album structural stress tests passed, production canonical Save PASS, nine-workspace characterization PASS, and real-FFmpeg M4 job PASS with 2 tests.
+
 ## Next Work
-- M4: Render Facade only.
-- Wrap current STEP10 -> Step08 -> V13 -> S11 -> FFmpegV2 chain before replacing compiler ownership.
-- Keep FFmpeg/ffprobe canonical and preserve existing render safety contracts.
-- Do not proceed to M5 until M4 gate PASS.
+- M5: Probe / Preview / Cache only.
+- Wrap current proven probe, accurate-preview, and cache behavior behind the approved service facades before replacing ownership.
+- Preserve current composition semantics, generation invalidation, and cache/stale-result safety.
+- Do not proceed to M6 until M5 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -124,4 +133,5 @@ Implementation is now allowed, but has **not started yet**.
 - M1 AppKernel/CompositionRoot: PASS
 - M2 Task Lifecycle/TaskSupervisor/TaskScope: PASS
 - M3 ProjectPersistence: PASS
-- Next operational action: M4 Render Facade only; then report gate before M5.
+- M4 RenderEngine Facade: PASS
+- Next operational action: M5 Probe / Preview / Cache only; then report gate before M6.

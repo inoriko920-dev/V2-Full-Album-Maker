@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M3 PERSISTENCE
+IMPLEMENTATION — M4 RENDER FACADE
 
 ## Current STEP
-M3 — ProjectPersistence — PASS
+M4 — RenderEngine Facade — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M3 — ProjectPersistence — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, and M3 are implemented and validated.
+M0/T1, M1, M2, M3, and M4 are implemented and validated.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -52,17 +52,27 @@ M3 result:
 
 Validated on Actions run `37588571955`: Q0 compile PASS, 37 M0–M3 contract tests PASS, 8 baseline atomic/project persistence tests PASS, 14 STEP11 persistence lifecycle/integration tests PASS, production canonical Save PASS, and nine-workspace read-only navigation PASS.
 
-No RenderEngine M4, ProcessSupervisor, Preview/Cache M5, workspace migration, UI redesign, schema bump, dependency change, or release work was performed.
+No ProcessSupervisor/H3 replacement, Preview/Cache M5, Beat Analysis M6, WorkspaceRegistry M7, UI redesign, schema bump, dependency change, or release work was performed.
+
+M4 result:
+- one AppKernel-owned `RenderEngine` is now the canonical facade for production render preflight and final execution;
+- `RenderAsyncBridge` no longer imports or constructs `RenderExecutor` directly;
+- the facade delegates to the existing STEP10 `RenderExecutor` and preserves the Step08 -> V13 -> S11 -> FFmpegV2 compiler chain;
+- immutable snapshot, critical preflight, AUTO hardware runtime verification/software fallback, progress/cancel, ffprobe verification, and transactional publish behavior remain intact;
+- a facade-level active-attempt guard rejects overlapping starts;
+- the AppKernel-to-legacy-window handoff uses a bounded ContextVar migration bridge so the production Qt bridge captures the exact kernel-owned engine;
+- H3 ProcessSupervisor remains explicitly deferred.
+
+Validated implementation candidate `5f7a428945102f08197bdbe91d7036fbff91c750` on Actions run `37591981581`: Q0 compile PASS; 43 M0–M4/entrypoint tests passed (1 skipped); 38 STEP10 render parity tests passed; 21 render safety/lifecycle tests passed (9 skipped); 2 long-album structural stress tests passed; production canonical Save PASS; nine-workspace read-only navigation PASS; real-FFmpeg M4 job PASS with 2 tests.
 
 ## Next Operational Step
-M3 is PASS. On the next explicit implementation turn:
-1. Start **M4 — Render Facade** only.
-2. Wrap the current proven STEP10 -> Step08 -> V13 -> S11 -> FFmpegV2 chain behind RenderEngine before replacing any compiler/runtime owner.
-3. Preserve immutable render snapshot, preflight, progress/cancel, ffprobe verification, transactional publish, and software fallback behavior.
-4. Keep FFmpeg/ffprobe canonical.
-5. Do not start M5 Preview/Cache, M6 Beat Analysis, M7 Workspace Registry, or UI redesign in M4.
-6. Run focused render parity + real-FFmpeg Q0/Q1 evidence before reporting M4 PASS.
-7. Do not proceed to M5 in the same turn unless explicitly instructed otherwise.
+M4 is PASS. On the next explicit implementation turn:
+1. Start **M5 — Probe / Preview / Cache** only.
+2. Introduce the approved MediaProbeService / PreviewEngine / CacheManager facades around current proven implementations before replacing ownership.
+3. Preserve Accurate Preview composition semantics and current cache-generation/stale-result protections.
+4. Do not start M6 Beat Analysis, M7 Workspace Registry, UI redesign, schema bump, dependency/release work in M5.
+5. Run focused preview/probe/cache parity and affected real-FFmpeg evidence before reporting M5 PASS.
+6. Do not proceed to M6 in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.
