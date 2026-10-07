@@ -13,9 +13,10 @@ Before doing any work:
 9. Preserve STEP 06 render decisions D06-01..D06-20.
 10. Preserve STEP 07 animation/Spectrum/parity decisions D07-01..D07-18.
 11. Preserve STEP 08 feature/AI decisions D08-01..D08-20.
-12. Do not skip planning gates or redesign UI/workflow merely because another architecture looks cleaner.
-13. Every future implementation must remain reversible and test-protected.
-14. If a required architecture decision is not covered by approved planning, stop and document it first.
+12. Preserve STEP 09 UI decisions D09-01..D09-20.
+13. Do not skip planning gates or redesign UI/workflow merely because another architecture looks cleaner.
+14. Every future implementation must remain reversible and test-protected.
+15. If a required architecture decision is not covered by approved planning, stop and document it first.
 
 ## Frozen Architecture Facts
 - ProjectDocument + EditorController/EditorSession remain authoritative.
@@ -87,30 +88,38 @@ AppKernel / CompositionRoot; ProjectSession; WorkspaceRegistry; TaskSupervisor /
 ## STEP 08 Feature / AI Rules
 - All user-facing baseline features default to MUST KEEP.
 - No user-facing removal is authorized by this planning set.
-- IMPROVE must preserve old workflows/projects; DEFER does not justify partial hidden implementation.
 - Manual editor remains the feature authority; AI coverage may safely lag behind.
 - AI provider plans only; local ActionRegistry + dry-run + EditorController own mutation.
-- Current STEP09 safe actions/permissions remain supported during migration.
 - Agent context is bounded, stable-ID based, and excludes paths/API keys/locator/vault data.
 - Ambiguity or insufficient context means clarification + zero mutation.
 - Any project/revision/context/permission incompatibility invalidates the plan; no auto-rebase.
 - Preview Diff and Execute use exactly the same resolvers/commands.
 - One plan commits as one revision and one Undo transaction.
-- Duplicate plan_id does not mutate twice.
-- Saved commands store/replay intent text, not stale executable plans.
-- `animation.write` is introduced only after STEP07 command contracts exist.
-- AI import/relink filesystem path selection remains local/manual.
-- AI direct render remains deferred until RenderEngine is production-proven and a separate render.request permission is explicitly designed.
-- No arbitrary shell/code/FFmpeg command/filesystem/network side effects.
-- Natural-language completion messages must be based on local execution evidence.
-- 100-key Gemini pool reliability behavior remains protected.
+- AI direct render and AI filesystem path selection remain deferred.
+
+## STEP 09 UI Rules
+- Preserve the existing production UI/workflow; no redesign is authorized.
+- Keep all 9 routes in the current order: Beranda, Media, Album, Timeline, Visual, Template, Spectrum, AI Agent, Render.
+- Preserve the command bar, navigation, context panel, center workspace, inspector/AI dock, timeline dock, and status bar mental model.
+- WorkspaceRegistry/WorkspaceBundle becomes the explicit route owner.
+- Retire UI patches route-by-route only after visual/state parity.
+- No FFmpeg/ffprobe, media scan/probe, Accurate Preview, BeatAnalysis, Gemini/network, heavy cache generation, or render verification/publish on the UI thread.
+- UI busy/progress/cancel states mirror underlying task state machines.
+- Global command/status state derives from ProjectSession/application services.
+- Required visual/responsive evidence: 1672/100%, 1366/100%, 125%, 150%.
+- Current production UI is the migration no-regression baseline.
+- Frozen canonical 1672x941 goldens remain immutable references; historical pixel-match remediation is a separate workstream.
+- No new UI-image prompt/reference set is required for this preservation scope.
+- AI Agent preserves Send/Preview/Execute confirmation/Cancel/Undo truth.
+- Render Center can show COMPLETED only after RenderEngine verified publication.
+- Render is the last route to migrate.
 
 ## Migration Rule
 Wrap current proven behavior first. Route one path through the facade. Prove parity. Only then retire the old direct path. Never dual-write project state.
 
 ## Current Handoff
 - Phase: PLANNING
-- Completed through: STEP 08
-- STEP 00–08: PASS
-- Next: STEP 09 — UI Preservation, Responsiveness, dan Integration Contract
+- Completed through: STEP 09
+- STEP 00–09: PASS
+- Next: STEP 10 — Testing, Regression, Stress, Benchmark, dan Release Quality Gate
 - Coding: BLOCKED
