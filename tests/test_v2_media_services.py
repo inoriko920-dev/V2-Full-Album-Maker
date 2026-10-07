@@ -20,7 +20,7 @@ from full_album_maker.cache_manager import (
 )
 from full_album_maker.editor_models import ProjectDocument
 from full_album_maker.media_library_model import MediaAsset, MediaMetadata, MediaType
-from full_album_maker.media_preview_cache import generate_preview
+from full_album_maker.media_preview_cache import MediaPreviewCache, generate_preview
 from full_album_maker.media_probe_service import (
     MediaProbeResult,
     MediaProbeService,
@@ -235,3 +235,24 @@ def test_real_ffmpeg_media_probe_service_audio_duration(tmp_path: Path) -> None:
     assert result.duration_seconds == pytest.approx(0.25, abs=0.03)
     assert result.fingerprint is not None
     assert result.fingerprint.tier == "F2"
+
+
+def test_media_preview_cache_close_stops_workers_and_rejects_new_requests(tmp_path: Path) -> None:
+    manager = _media_cache_manager(tmp_path / "cache", version=9)
+    cache = MediaPreviewCache(workers=2, cache_manager=manager)
+
+    assert cache.closed is False
+    assert cache.close(timeout=1.0) is True
+    assert cache.closed is True
+    assert all(not worker.is_alive() for worker in cache._threads)
+
+    source = tmp_path / "after-close.png"
+    source.write_bytes(b"not-a-real-image")
+    asset = MediaAsset(
+        asset_id="asset-after-close",
+        path=str(source),
+        display_name=source.name,
+        media_type=MediaType.PHOTO,
+    )
+    assert cache.request(asset) is False
+    assert cache.job_count == 0
