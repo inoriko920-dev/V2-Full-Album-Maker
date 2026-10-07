@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QInputDialog
+from PySide6.QtWidgets import QInputDialog, QPushButton
 
 from .editor_commands import SetPlaylistEntries
 from .editor_interaction_commands import SetLayerEnabled, SetLayerLocked
@@ -53,6 +53,9 @@ def _install_widgets(self) -> None:
     self._inspector_router.addWidget(self.timeline_inspector_s05)
 
     self.timeline_precision_s05 = TimelinePrecisionPanel()
+    # Preserve the proven STEP05 labels without a global constructor monkey-patch.
+    self.timeline_precision_s05.ripple.setText("↔ Ripple")
+    self.timeline_precision_s05.snap.setText("⌁ Snap")
     body_layout = self.foundation_shell.timeline.canvas.parentWidget().layout()
     body_layout.addWidget(self.timeline_precision_s05, 1)
     self.timeline_precision_s05.hide()
@@ -124,6 +127,15 @@ def _route(self, route: str) -> None:
     self.timeline_context_s05.setVisible(active)
     self.timeline_precision_s05.setVisible(active)
     if not active:
+        # Preserve the exact route-fix behavior locally instead of wrapping
+        # Window._s05_route from a second installer module.
+        mode = getattr(self.foundation_shell.timeline, "mode", None)
+        if mode is not None:
+            mode.setVisible(True)
+        parent = self.foundation_shell.timeline.canvas.parentWidget()
+        for button in parent.findChildren(QPushButton):
+            if button.text() in {"Split", "Ripple", "Snap", "Marker"}:
+                button.setVisible(True)
         if self._inspector_router.currentWidget() is self.timeline_inspector_s05:
             self._inspector_router.setCurrentIndex(1)
         return

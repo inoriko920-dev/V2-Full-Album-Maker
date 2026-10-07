@@ -12,6 +12,7 @@ from .album_workspace import AlbumContextWidget, AlbumMassToolsWidget, AlbumTime
 from .editor_commands import ReorderSongs, SetPlaylistEntries
 from .editor_models import ProjectDocument
 from .legacy_sync_v2 import sync_legacy_media
+from .media_library_services import canonical_path_key
 from .playlist_commands import MoveSong, SetSongCover, SetSongVisual
 from .playlist_feature import set_active_audio_paths
 from .playlist_service_v2 import PlaylistServiceV2
@@ -49,18 +50,32 @@ def _active_document(self) -> ProjectDocument:
     return self.editor_workspace.document()
 
 
+def _mirror_legacy_active_audio(self, document: ProjectDocument) -> None:
+    """Mirror only playlist audio paths that already exist in legacy Project."""
+
+    assets = document.asset_map()
+    legacy_keys = {
+        canonical_path_key(str(getattr(item, "path", "")))
+        for item in getattr(self.project, "audios", ())
+        if str(getattr(item, "path", "")).strip()
+    }
+    active_paths: list[str] = []
+    for song in document.playlist.entries:
+        asset = assets.get(song.asset_id)
+        if asset is None or asset.kind != "audio":
+            continue
+        path = str(asset.locator or "")
+        if path and canonical_path_key(path) in legacy_keys:
+            active_paths.append(path)
+    set_active_audio_paths(self.project, active_paths)
+
+
 def _capture_document(self) -> None:
     if not hasattr(self, "editor_workspace"):
         return
     document = self.editor_workspace.document()
     self.project._album_document_v2 = document.to_dict()
-    assets = document.asset_map()
-    active_paths: list[str] = []
-    for song in document.playlist.entries:
-        asset = assets.get(song.asset_id)
-        if asset is not None and asset.kind == "audio":
-            active_paths.append(asset.locator)
-    set_active_audio_paths(self.project, active_paths)
+    _mirror_legacy_active_audio(self, document)
 
 
 def _restore_document(self) -> None:
@@ -205,14 +220,11 @@ def _document_changed(self, document: ProjectDocument) -> None:
     if getattr(self, "_s04_restoring", False):
         return
     self.project._album_document_v2 = document.to_dict()
-    assets = document.asset_map()
-    set_active_audio_paths(
-        self.project,
-        [assets[song.asset_id].locator for song in document.playlist.entries if song.asset_id in assets],
-    )
+    _mirror_legacy_active_audio(self, document)
     if hasattr(self, "album_workspace"):
         self._s04_refresh()
-    self.foundation_shell.refresh_commands()
+    if hasattr(self, "foundation_shell"):
+        self.foundation_shell.refresh_commands()
 
 
 def _refresh_album(self) -> None:

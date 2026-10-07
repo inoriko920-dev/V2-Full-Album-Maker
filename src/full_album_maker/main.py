@@ -14,13 +14,10 @@ from full_album_maker.render_lifecycle import install_render_lifecycle
 from full_album_maker.project_dirty import install_project_dirty_state
 from full_album_maker.async_import import install_async_import
 from full_album_maker.media_feature import install_step03_media
-from full_album_maker.media_feature_activation import install_step03_media_activation_guard
 from full_album_maker.media_completion import install_step03_media_completion
 from full_album_maker.media_layout_fix import install_step03_media_layout_fix
 from full_album_maker.album_feature import install_step04_album
-from full_album_maker.album_restore_fix import install_step04_album_restore_fix
 from full_album_maker.timeline_feature_step05 import install_step05_timeline
-from full_album_maker.timeline_route_fix import install_step05_timeline_route_fix
 from full_album_maker.timeline_completion_step05 import install_step05_timeline_completion
 from full_album_maker.visual_feature_step06 import install_step06_visual
 from full_album_maker.visual_preview_decode_step06 import install_step06_visual_preview_decode
@@ -47,13 +44,10 @@ install_render_lifecycle()
 install_project_dirty_state()
 install_async_import()
 install_step03_media()
-install_step03_media_activation_guard()
 install_step03_media_completion()
 install_step03_media_layout_fix()
 install_step04_album()
-install_step04_album_restore_fix()
 install_step05_timeline()
-install_step05_timeline_route_fix()
 install_step05_timeline_completion()
 install_step06_visual()
 install_step06_visual_preview_decode()
