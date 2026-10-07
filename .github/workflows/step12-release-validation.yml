@@ -274,21 +274,21 @@ jobs:
           $sourceNotes = $sourceNotes.Replace('Q5 must approve the exact semantic version + candidate commit + ZIP SHA-256 and then publish that exact tested ZIP without rebuilding it.', 'Q5 approved the exact semantic version + candidate commit + ZIP SHA-256; this stable publication uses that exact tested ZIP without rebuilding it.')
 
           $rollback = Get-Content 'q5-release-evidence\rollback.json' -Raw | ConvertFrom-Json
-          $identity = @"
-
-## Q5 verified release identity
-
-- Version: $env:Q5_VERSION
-- Candidate commit: $env:Q4_CANDIDATE_SHA
-- Portable ZIP: $env:Q4_ZIP_NAME
-- Portable ZIP SHA-256: $env:Q4_ZIP_SHA256
-- Q4 Actions run: $env:Q4_RUN_ID
-- Q4 Actions artifact ID: $env:Q4_ARTIFACT_ID
-- Rollback stable tag: $($rollback.tag)
-
-Q5 re-ran the extracted exact ZIP smoke without global Python, global FFmpeg, or API keys before publication. The stable asset is the same Q4-tested ZIP; it was not rebuilt.
-"@
-          ($sourceNotes + $identity) | Set-Content 'q5-release-notes.md' -Encoding utf8
+          $identity = @(
+            ''
+            '## Q5 verified release identity'
+            ''
+            "- Version: $env:Q5_VERSION"
+            "- Candidate commit: $env:Q4_CANDIDATE_SHA"
+            "- Portable ZIP: $env:Q4_ZIP_NAME"
+            "- Portable ZIP SHA-256: $env:Q4_ZIP_SHA256"
+            "- Q4 Actions run: $env:Q4_RUN_ID"
+            "- Q4 Actions artifact ID: $env:Q4_ARTIFACT_ID"
+            "- Rollback stable tag: $($rollback.tag)"
+            ''
+            'Q5 re-ran the extracted exact ZIP smoke without global Python, global FFmpeg, or API keys before publication. The stable asset is the same Q4-tested ZIP; it was not rebuilt.'
+          ) -join [Environment]::NewLine
+          ($sourceNotes + [Environment]::NewLine + $identity) | Set-Content 'q5-release-notes.md' -Encoding utf8
 
           [ordered]@{
             status = 'PASS_READY_TO_PUBLISH'
