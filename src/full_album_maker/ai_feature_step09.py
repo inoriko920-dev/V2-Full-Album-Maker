@@ -29,6 +29,7 @@ from .timeline_workspace_step05 import TimelinePrecisionPanel
 
 _installed = False
 _original_init: Any = None
+_original_close_event: Any = None
 
 
 def _key_ready(self) -> bool:
@@ -58,6 +59,7 @@ def _install_widgets(self) -> None:
     self._s09_controller_identity: int | None = None
     self._s09_async: AsyncAgentProvider | None = None
     self._s09_request_token = 0
+    self._s09_closed = False
     self._s09_provider_id = _initial_provider(self)
     self._s09_context_snapshot = None
 
@@ -240,7 +242,7 @@ def _replace_async_provider(self) -> AsyncAgentProvider:
 
 
 def _refresh(self) -> None:
-    if not hasattr(self, "ai_workspace_s09"):
+    if getattr(self, "_s09_closed", False) or not hasattr(self, "ai_workspace_s09"):
         return
     session = self._s09_ensure_session()
     document = self.editor_workspace.document()
@@ -299,6 +301,8 @@ def _playback_sync(self) -> None:
 
 
 def _send(self, prompt: str) -> None:
+    if getattr(self, "_s09_closed", False):
+        return
     session = self._s09_ensure_session()
     try:
         context = self._s09_build_context(prompt)
@@ -318,6 +322,8 @@ def _send(self, prompt: str) -> None:
 
 
 def _provider_result(self, token: int, result) -> None:
+    if getattr(self, "_s09_closed", False):
+        return
     if int(token) != int(self._s09_request_token):
         return
     session = self._s09_ensure_session()
@@ -329,6 +335,8 @@ def _provider_result(self, token: int, result) -> None:
 
 
 def _provider_failed(self, token: int, error: str) -> None:
+    if getattr(self, "_s09_closed", False):
+        return
     if int(token) != int(self._s09_request_token):
         return
     self._s09_ensure_session().fail(str(error))
@@ -336,6 +344,8 @@ def _provider_failed(self, token: int, error: str) -> None:
 
 
 def _busy_changed(self, busy: bool) -> None:
+    if getattr(self, "_s09_closed", False):
+        return
     self.foundation_state.set_status(
         ai=("AI Agent menafsirkan…", "warning") if busy else ("AI Agent siap", "success")
     )
@@ -478,13 +488,43 @@ def _attachment_info(self) -> None:
     )
 
 
+def _close_event(self, event) -> None:
+    _original_close_event(self, event)
+    try:
+        accepted = bool(event.isAccepted())
+    except Exception:
+        accepted = True
+    if not accepted:
+        return
+
+    self._s09_closed = True
+    bridge = getattr(self, "_s09_async", None)
+    if bridge is not None:
+        bridge.close()
+        self._s09_async = None
+
+    session = getattr(self, "_s09_agent_session", None)
+    if session is not None:
+        try:
+            if session.snapshot().state in {
+                AgentState.INTERPRETING,
+                AgentState.NEEDS_CLARIFICATION,
+                AgentState.PLAN_READY,
+                AgentState.PREVIEW_READY,
+            }:
+                session.cancel()
+        except Exception:
+            pass
+
+
 def install_step09_ai_agent() -> None:
-    global _installed, _original_init
+    global _installed, _original_init, _original_close_event
     if _installed:
         return
     from .foundation_window import FoundationMainWindow as Window
 
     _original_init = Window.__init__
+    _original_close_event = Window.closeEvent
 
     def wrapped_init(self, *args, **kwargs) -> None:
         _original_init(self, *args, **kwargs)
@@ -502,6 +542,7 @@ def install_step09_ai_agent() -> None:
         QTimer.singleShot(0, reactivate_current_route)
 
     Window.__init__ = wrapped_init
+    Window.closeEvent = _close_event
     Window._s09_key_ready = _key_ready
     Window._s09_initial_provider = _initial_provider
     Window._s09_selected_song_ids = _selected_song_ids

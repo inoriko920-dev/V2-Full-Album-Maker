@@ -200,3 +200,77 @@ def test_production_ai_route_and_mock_plan_preview_are_non_destructive() -> None
     env = dict(os.environ)
     env["FAM_STEP09_PROVIDER"] = "mock"
     _run_qt_script(script, timeout=40)
+
+
+def test_pending_ai_provider_is_closed_when_window_close_is_accepted() -> None:
+    script = r'''
+        import os
+        import threading
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        os.environ["FAM_STEP09_PROVIDER"] = "mock"
+
+        from PySide6.QtCore import QEventLoop, QTimer
+        from PySide6.QtWidgets import QApplication
+        import full_album_maker.main  # installs production layers through STEP09
+        from full_album_maker.ai_agent_core_step09 import AgentState, ProviderInterpretation
+        from full_album_maker.foundation_window import FoundationMainWindow
+
+        app = QApplication.instance() or QApplication([])
+
+        def run_events(milliseconds=120):
+            loop = QEventLoop()
+            QTimer.singleShot(milliseconds, loop.quit)
+            loop.exec()
+
+        class BlockingProvider:
+            provider_id = "test"
+
+            def __init__(self):
+                self.started = threading.Event()
+                self.release = threading.Event()
+
+            def interpret(self, prompt, context):
+                self.started.set()
+                self.release.wait(timeout=5)
+                return ProviderInterpretation(
+                    message="late-result",
+                    clarification="late-result",
+                )
+
+        provider = BlockingProvider()
+        window = FoundationMainWindow()
+        window.show()
+        run_events(60)
+
+        window._s09_make_provider = lambda: provider
+        window._s09_send("uji close")
+        bridge = window._s09_async
+        assert bridge is not None
+        assert provider.started.wait(timeout=2)
+
+        before = window._s09_ensure_session().snapshot().state
+        assert before == AgentState.INTERPRETING
+
+        window.close()
+        run_events(80)
+
+        provider.release.set()
+        assert bridge.wait_for_idle(timeout=2)
+        run_events(180)
+
+        assert bridge._closed is True
+        after = window._s09_agent_session.snapshot().state
+        assert after not in {
+            AgentState.NEEDS_CLARIFICATION,
+            AgentState.PLAN_READY,
+            AgentState.PREVIEW_READY,
+            AgentState.COMPLETED,
+        }
+
+        window.deleteLater()
+        run_events(30)
+    '''
+    env = dict(os.environ)
+    env["FAM_STEP09_PROVIDER"] = "mock"
+    _run_qt_script(script, timeout=30)
