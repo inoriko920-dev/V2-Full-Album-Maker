@@ -19,6 +19,7 @@ from .render_workspace_step10 import RenderCenterWorkspace, RenderHistoryContext
 
 _installed = False
 _original_init: Any = None
+_original_close_event: Any = None
 
 _TERMINAL = {
     RenderJobState.COMPLETED,
@@ -61,6 +62,7 @@ def verified_output_path(job: RenderJob | None) -> Path | None:
 def _install_widgets(self) -> None:
     self._s10_queue = RenderQueue()
     self._s10_async = RenderAsyncBridge(parent=self)
+    self.destroyed.connect(lambda *_args: self._s10_async.close())
     self._s10_preflight_token = 0
     self._s10_preflight_report = None
     self._s10_preflight_capability = None
@@ -524,12 +526,13 @@ def _refresh(self) -> None:
 
 
 def install_step10_render() -> None:
-    global _installed, _original_init
+    global _installed, _original_init, _original_close_event
     if _installed:
         return
     from .foundation_window import FoundationMainWindow as Window
 
     _original_init = Window.__init__
+    _original_close_event = Window.closeEvent
 
     def wrapped_init(self, *args, **kwargs) -> None:
         _original_init(self, *args, **kwargs)
@@ -545,7 +548,15 @@ def install_step10_render() -> None:
 
         QTimer.singleShot(0, reactivate_current_route)
 
+    def wrapped_close_event(self, event) -> None:
+        _original_close_event(self, event)
+        if event.isAccepted():
+            bridge = getattr(self, "_s10_async", None)
+            if bridge is not None:
+                bridge.close()
+
     Window.__init__ = wrapped_init
+    Window.closeEvent = wrapped_close_event
     Window._s10_route = _route
     Window._s10_document_changed = _document_changed
     Window._s10_settings_changed = _settings_changed

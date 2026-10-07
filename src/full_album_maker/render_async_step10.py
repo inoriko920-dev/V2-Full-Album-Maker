@@ -30,6 +30,7 @@ class RenderAsyncBridge(QObject):
         self._preflight_generation = 0
         self._active_attempt = ""
         self._cancel_event: threading.Event | None = None
+        self._closed = False
         # During normal production startup AppKernel binds its single M4 engine
         # in a context while the legacy window is constructed. Tests/legacy
         # callers may still inject an engine explicitly.
@@ -38,6 +39,18 @@ class RenderAsyncBridge(QObject):
     @property
     def render_engine(self) -> RenderEngine:
         return self._render_engine
+
+    @property
+    def closed(self) -> bool:
+        with self._lock:
+            return bool(self._closed)
+
+    def _emit_if_open(self, signal: Signal, *args) -> bool:
+        with self._lock:
+            if self._closed:
+                return False
+        signal.emit(*args)
+        return True
 
     def _capability_for_settings(self, settings: RenderSettings) -> FFmpegCapability:
         # Compatibility helper retained for existing callers/tests. Policy now
@@ -48,8 +61,16 @@ class RenderAsyncBridge(QObject):
         with self._lock:
             self._preflight_generation += 1
             token = self._preflight_generation
+            if self._closed:
+                return token
         snapshot = document.clone()
-        self._executor.submit(self._run_preflight, token, snapshot, settings)
+        try:
+            self._executor.submit(self._run_preflight, token, snapshot, settings)
+        except RuntimeError:
+            # close() may win a race between the closed check and submit().
+            # Treat it as an invalidated request rather than surfacing an
+            # executor-shutdown exception into the Qt event loop.
+            return token
         return token
 
     def invalidate_preflight(self) -> int:
@@ -66,23 +87,32 @@ class RenderAsyncBridge(QObject):
             with self._lock:
                 current = self._preflight_generation
             if token == current:
-                self.preflight_failed.emit(token, str(exc))
+                self._emit_if_open(self.preflight_failed, token, str(exc))
             return
         with self._lock:
             current = self._preflight_generation
         if token == current:
-            self.preflight_ready.emit(token, report, capability)
+            self._emit_if_open(self.preflight_ready, token, report, capability)
 
     def start(self, job: RenderJob) -> bool:
         with self._lock:
-            if self._active_attempt:
+            if self._closed or self._active_attempt:
                 return False
             self._active_attempt = job.attempt_id
             self._cancel_event = threading.Event()
             cancel_event = self._cancel_event
-        self.busy_changed.emit(True)
-        self.render_started.emit(job.job_id, job.attempt_id)
-        self._executor.submit(self._run_job, job, cancel_event)
+        self._emit_if_open(self.busy_changed, True)
+        self._emit_if_open(self.render_started, job.job_id, job.attempt_id)
+        try:
+            self._executor.submit(self._run_job, job, cancel_event)
+        except RuntimeError:
+            # close() may have shut the executor down after the state claim.
+            with self._lock:
+                if self._active_attempt == job.attempt_id:
+                    self._active_attempt = ""
+                    self._cancel_event = None
+            self._emit_if_open(self.busy_changed, False)
+            return False
         return True
 
     def _run_job(self, job: RenderJob, cancel_event: threading.Event) -> None:
@@ -93,29 +123,44 @@ class RenderAsyncBridge(QObject):
             result = self._render_engine.execute(
                 job,
                 cancel_event=cancel_event,
-                on_metrics=lambda value: self.metrics_ready.emit(job.job_id, job.attempt_id, value),
-                on_log=lambda line: self.log_ready.emit(job.job_id, job.attempt_id, line),
+                on_metrics=lambda value: self._emit_if_open(
+                    self.metrics_ready, job.job_id, job.attempt_id, value
+                ),
+                on_log=lambda line: self._emit_if_open(
+                    self.log_ready, job.job_id, job.attempt_id, line
+                ),
             )
         except Step10RenderCancelled as exc:
-            self.render_failed.emit(job.job_id, job.attempt_id, "CANCELLED", str(exc))
+            self._emit_if_open(
+                self.render_failed,
+                job.job_id,
+                job.attempt_id,
+                "CANCELLED",
+                str(exc),
+            )
         except Exception as exc:
-            self.render_failed.emit(
+            self._emit_if_open(
+                self.render_failed,
                 job.job_id,
                 job.attempt_id,
                 job.error_code or "RENDER_FAILED",
                 job.error_message or str(exc),
             )
         else:
-            self.render_finished.emit(job.job_id, job.attempt_id, result)
+            self._emit_if_open(
+                self.render_finished, job.job_id, job.attempt_id, result
+            )
         finally:
             with self._lock:
                 if self._active_attempt == job.attempt_id:
                     self._active_attempt = ""
                     self._cancel_event = None
-            self.busy_changed.emit(False)
+            self._emit_if_open(self.busy_changed, False)
 
     def cancel(self) -> bool:
         with self._lock:
+            if self._closed:
+                return False
             event = self._cancel_event
         if event is None:
             return False
@@ -125,9 +170,17 @@ class RenderAsyncBridge(QObject):
     @property
     def busy(self) -> bool:
         with self._lock:
-            return bool(self._active_attempt)
+            return bool(self._active_attempt) and not self._closed
 
     def close(self) -> None:
-        self.cancel()
-        self.invalidate_preflight()
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._preflight_generation += 1
+            event = self._cancel_event
+            self._active_attempt = ""
+            self._cancel_event = None
+        if event is not None:
+            event.set()
         self._executor.shutdown(wait=False, cancel_futures=True)
