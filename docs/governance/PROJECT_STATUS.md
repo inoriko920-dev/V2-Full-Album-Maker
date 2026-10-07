@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M7 WORKSPACE REGISTRY
+IMPLEMENTATION — M8 LEGACY BRIDGE RETIREMENT
 
 ## Current STEP
-M7 — Workspace Registry — PASS
+M8 — Legacy Bridge Retirement — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ M7 — Workspace Registry — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1, M1, M2, M3, M4, M5, M6, and M7 are implemented and validated.
+M0/T1, M1, M2, M3, M4, M5, M6, M7, and M8 are implemented and validated.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -107,14 +107,27 @@ M7 result:
 
 Validated candidate `3e0af4f8b5c7a344a481b02f8805286209182b6f` on Actions run `37597489445`: Q0 compile PASS; 63 M0–M7 contract tests passed (4 skipped); 42 nine-route functional UI tests passed; 13 production navigation/persistence tests passed; 23 responsive/shell regression tests passed; 2 long-album structural stress tests passed; real-FFmpeg M7 job PASS with 2 tests.
 
+M8 result:
+- three proven obsolete bridge modules were physically removed: `media_feature_activation.py`, `album_restore_fix.py`, and `timeline_route_fix.py`;
+- their imports and installer calls were removed from the production `main.py` chain;
+- Media no longer needs a queued route-reactivation guard because M7 WorkspaceRegistry/WorkspaceStack now preserves active route/widget coherence;
+- Album legacy active-audio sanitization moved into the canonical `album_feature.py` owner, and a hidden dependency on the old bridge-injected helper name was removed;
+- Timeline's proven Ripple/Snap labels and route-exit placeholder-control behavior moved into `timeline_feature_step05.py` instead of wrapping the route method globally;
+- production tests prove persisted Media/Album/Timeline startup routes remain coherent without the reactivation wrappers;
+- bridges that still own unreplaced behavior were intentionally retained: media layout, timeline completion, visual timeline completion, STEP11 integration completion, and render queue presentation;
+- ProjectDocument schema v2, TIMEBASE=240000, all nine routes, M2–M7 service ownership, compiler chain, UI design, dependencies, and release behavior remain unchanged;
+- M9 Consolidation was not started.
+
+Validated candidate `006d64eff4a0793162cb759a8cd77476a1a9c704` on Actions run `37598817830`: Q0 compile PASS; 68 M0–M8 contract tests passed (4 skipped); 8 retired-bridge parity tests passed; 42 nine-route UI tests passed; 25 production navigation/persistence/render/preview tests passed (2 skipped); 28 responsive/lifecycle tests passed; 2 long-album structural stress tests passed; real-FFmpeg M8 job PASS with 3 tests.
+
 ## Next Operational Step
-M7 is PASS. On the next explicit implementation turn:
-1. Start **M8 — Legacy Bridge Retirement** only.
-2. Re-read STEP 03 migration/retirement rules and M7 WorkspaceRegistry evidence before removing any legacy owner.
-3. Retire only bridges/patch ownership that is no longer a production owner and already has replacement parity evidence.
-4. Preserve ProjectDocument/EditorSession authority, all 9 route behavior, UI baseline, and M2–M7 service boundaries.
-5. Run focused ownership, production navigation, persistence, render/preview, UI, and stress evidence before reporting M8 PASS.
-6. Do not proceed to M9 Consolidation in the same turn unless explicitly instructed otherwise.
+M8 is PASS. On the next explicit implementation turn:
+1. Start **M9 — Consolidation** only.
+2. Re-read STEP 03 consolidation order plus M8 retirement evidence before combining or simplifying surviving runtime paths.
+3. Consolidate only already-proven ownership boundaries; do not redesign the UI, project schema, or release model.
+4. Preserve ProjectDocument/EditorSession authority, all nine routes, and M2–M8 gate evidence.
+5. Run focused ownership, production navigation, persistence, render/preview, UI, lifecycle, and stress evidence before reporting M9 PASS.
+6. Do not begin Windows Q4/Q5 release work in the same turn unless the documented implementation sequence explicitly reaches that gate and the user separately continues.
 
 ## Canonical References
 - MASTER planning DOCX.

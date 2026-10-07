@@ -69,7 +69,7 @@ Verified evidence:
 5. Obsolete duplicate `STEP_07_ANIMATION_TRANSITION_SPECTRUM_DAN_PREVIEW_PARITY.docx` is absent.
 6. Detailed evidence is recorded in `docs/planning/PRE_CODING_GATE_VERIFICATION.md`.
 
-Implementation is active. M0/T1 through M7 are completed and gate-protected.
+Implementation is active. M0/T1 through M8 are completed and gate-protected.
 
 ## M0/T1 Implementation Result — PASS
 - Branch: `impl-m0-t1-feature-parity`
@@ -159,12 +159,25 @@ Implementation is active. M0/T1 through M7 are completed and gate-protected.
 - GitHub Actions run `37597489445`: 63 M0–M7 contracts passed (4 skipped), 42 nine-route functional UI tests passed, 13 production navigation/persistence tests passed, 23 responsive/shell regressions passed, 2 long-album structural stress tests passed, and real-FFmpeg M7 job PASS with 2 tests.
 - Detailed records: `docs/implementation/M7_WORKSPACE_REGISTRY.md` and `docs/implementation/M7_EVIDENCE.md`.
 
+## M8 Implementation Result — PASS
+- Branch: `impl-m8-legacy-bridge-retirement`
+- Physically removed three obsolete bridge modules: `media_feature_activation.py`, `album_restore_fix.py`, and `timeline_route_fix.py`.
+- Removed their imports/installer calls from the production main chain.
+- Media persisted-route coherence is now owned by M7 WorkspaceRegistry/WorkspaceStack; no replacement timer was introduced.
+- Album's valid legacy active-audio compatibility invariant now lives directly in `album_feature.py`; a hidden dependency on the old bridge-injected helper was eliminated.
+- Timeline's proven Ripple/Snap label and route-exit control behavior now lives directly in `timeline_feature_step05.py`; no global route wrapper remains.
+- Explicit M8 tests prove persisted Media/Album/Timeline startup, Album legacy compatibility, Timeline route-fix behavior, and physical absence of retired modules.
+- Bridges that still own unreplaced production behavior remain intentionally present.
+- No M9 consolidation, UI redesign, schema bump, dependency, compiler, build, or release work was performed.
+- GitHub Actions run `37598817830`: 68 M0–M8 contracts passed (4 skipped), 8 retirement-parity tests passed, 42 nine-route UI tests passed, 25 production navigation/persistence/render/preview tests passed (2 skipped), 28 responsive/lifecycle tests passed, 2 long-album structural stress tests passed, and real-FFmpeg M8 job PASS with 3 tests.
+- Detailed records: `docs/implementation/M8_LEGACY_BRIDGE_RETIREMENT.md` and `docs/implementation/M8_EVIDENCE.md`.
+
 ## Next Work
-- M8: Legacy Bridge Retirement only.
-- Re-read STEP 03 legacy-retirement rules and M7 ownership evidence before deleting or bypassing any patch/bridge.
-- Retire only legacy code that is no longer a production owner and has replacement parity evidence.
-- Preserve all nine routes, ProjectDocument/EditorSession authority, UI/workflow baseline, and M2–M7 service boundaries.
-- Do not proceed to M9 Consolidation until M8 gate PASS.
+- M9: Consolidation only.
+- Re-read STEP 03 consolidation order and M8 retirement evidence before simplifying surviving runtime paths.
+- Consolidate only boundaries with proven replacement ownership; do not turn M9 into UI/schema/release redesign.
+- Preserve all nine routes, ProjectDocument/EditorSession authority, and M2–M8 service/gate evidence.
+- Do not start Windows Q4/Q5 release work until M9 itself reaches PASS and the documented release sequence is explicitly continued.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -178,4 +191,5 @@ Implementation is active. M0/T1 through M7 are completed and gate-protected.
 - M5 MediaProbeService / PreviewEngine / CacheManager: PASS
 - M6 BeatAnalysisService: PASS
 - M7 WorkspaceRegistry: PASS
-- Next operational action: M8 Legacy Bridge Retirement only; then report gate before M9.
+- M8 Legacy Bridge Retirement: PASS
+- Next operational action: M9 Consolidation only; then report gate before release-quality work.
