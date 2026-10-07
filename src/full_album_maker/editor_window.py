@@ -274,6 +274,14 @@ class EditorMainWindow(LegacyMainWindow):
                     event.ignore()
                     return
         super().closeEvent(event)
+        try:
+            accepted = bool(event.isAccepted())
+        except Exception:
+            accepted = True
+        if accepted:
+            shutdown = getattr(self.editor_workspace, "shutdown_async", None)
+            if callable(shutdown):
+                shutdown()
 
 
 def run() -> int:
