@@ -178,6 +178,7 @@ def test_production_window_starts_with_corrupt_queue_quarantined() -> None:
             assert "dikarantina" in window.render_inspector_s10.warning.text()
 
             window._s10_async.close()
+            window._s10_queue.close()
             window.hide()
             window.deleteLater()
             app.processEvents()
