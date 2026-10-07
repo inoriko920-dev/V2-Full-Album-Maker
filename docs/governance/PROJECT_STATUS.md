@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-IMPLEMENTATION — M0/T1 CHARACTERIZATION
+IMPLEMENTATION — M1 COMPOSITION ROOT
 
 ## Current STEP
-M0/T1 — FeatureParityRegistry + Characterization Map — PASS
+M1 — AppKernel / CompositionRoot — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,26 +37,29 @@ M0/T1 — FeatureParityRegistry + Characterization Map — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1 IMPLEMENTED AND VALIDATED. This slice is additive characterization infrastructure only.
+M0/T1 and M1 are implemented and validated.
 
-Implemented:
-- machine-readable `FeatureParityRegistry` with 51 MUST KEEP behavior families across 11 areas;
-- exact mapping to existing baseline test functions/workflow evidence;
-- human-readable M0/T1 characterization map;
-- focused Q0/Q1 GitHub Actions gate.
+M1 result:
+- one explicit `AppKernel / CompositionRoot` launch boundary exists;
+- current GUI and portable-smoke implementations are wrapped by `LegacyRuntimeAdapter`;
+- `main.py` routes launch through the kernel after the existing installer chain;
+- FeatureParityRegistry is validated when the composition root builds;
+- ProjectDocument + EditorController/EditorSession remain authoritative;
+- no service ownership was migrated and no legacy installer was removed/reordered.
 
-Validated on Actions run `37583231121`: compile PASS, 6 registry tests PASS, 1 baseline nine-workspace navigation smoke PASS.
+Validated on Actions run `37583919255`: Q0 compile PASS, 14 contract tests PASS, Q1 nine-workspace navigation PASS, Q1 authoritative-state/canonical-save production shell PASS.
 
-No existing runtime application file, UI, renderer, project schema, dependency, version, or legacy implementation was modified by M0/T1.
+No UI redesign, dependency, project schema, renderer, persistence, AI, workspace ownership, or M2 lifecycle migration was performed.
 
 ## Next Operational Step
-M0/T1 is PASS. On the next explicit implementation turn:
-1. Start **M1 — additive AppKernel/CompositionRoot** only.
-2. Wrap current proven behavior; do not replace services or delete legacy ownership yet.
-3. Keep ProjectDocument + EditorController authoritative.
-4. Use FeatureParityRegistry IDs to declare touched behavior.
-5. Run the required Q0/Q1 gate before reporting M1 PASS.
-6. Do not proceed to M2 in the same turn unless explicitly instructed otherwise.
+M1 is PASS. On the next explicit implementation turn:
+1. Start **M2 — Task Lifecycle** only.
+2. Introduce the central TaskSupervisor/TaskScope boundary additively.
+3. Characterize current async/process owners before routing any owner through M2.
+4. Do not migrate persistence, render orchestration, preview/cache, workspace ownership, or AI provider ownership yet.
+5. Preserve M0 FeatureParityRegistry and M1 AppKernel boundaries.
+6. Run focused Q0/Q1 lifecycle/cancel/close/stale-result evidence before reporting M2 PASS.
+7. Do not proceed to M3 in the same turn unless explicitly instructed otherwise.
 
 ## Canonical References
 - MASTER planning DOCX.

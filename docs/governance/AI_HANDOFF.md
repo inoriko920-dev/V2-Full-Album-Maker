@@ -79,14 +79,25 @@ Implementation is now allowed, but has **not started yet**.
 - GitHub Actions run `37583231121`: Q0 compile PASS, 6 registry tests PASS, Q1 nine-workspace navigation smoke PASS.
 - Existing runtime application files were not edited.
 
+## M1 Implementation Result — PASS
+- Branch: `impl-m1-app-kernel`
+- AppKernel/CompositionRoot is now the explicit launch wiring boundary.
+- Existing GUI and portable smoke are wrapped through `LegacyRuntimeAdapter`.
+- The existing production installer chain remains in the same order.
+- ProjectDocument + EditorController/EditorSession remain authoritative.
+- No current service implementation or ownership was replaced.
+- GitHub Actions run `37583919255`: Q0 compile PASS, 14 contract tests PASS, Q1 nine-workspace navigation PASS, Q1 authoritative-state/canonical-save shell PASS.
+
 ## Next Work
-- M1: additive AppKernel/CompositionRoot using current proven behavior through legacy adapters.
-- Do not replace existing service implementations or delete legacy ownership in M1.
-- Do not start with animation catalog, compiler rewrite, route patch deletion, or release work.
+- M2: Task Lifecycle only.
+- Introduce TaskSupervisor/TaskScope additively and characterize current owners first.
+- Do not migrate persistence/render/preview/workspaces/AI ownership in M2 unless explicitly within the approved lifecycle boundary.
+- Do not proceed to M3 until M2 gate PASS.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
 - Completed planning: STEP 00–11 PASS
 - Pre-coding documentation gate: PASS
 - M0/T1 FeatureParityRegistry + characterization: PASS
-- Next operational action: M1 AppKernel/CompositionRoot only; then report gate before M2.
+- M1 AppKernel/CompositionRoot: PASS
+- Next operational action: M2 Task Lifecycle only; then report gate before M3.

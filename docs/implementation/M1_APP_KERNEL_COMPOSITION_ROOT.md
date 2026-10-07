@@ -1,6 +1,6 @@
 # M1 — AppKernel / CompositionRoot Additive Migration
 
-Status: **IMPLEMENTED — validation pending**
+Status: **PASS — additive AppKernel / CompositionRoot implemented and validated**
 
 ## Scope
 
@@ -110,3 +110,28 @@ No project/data migration exists in M1, so rollback requires no data conversion.
 
 After M1 gate PASS, the next allowed slice is **M2 — Task Lifecycle**.
 M2 must not begin in the same implementation turn.
+
+
+## Validation Evidence
+
+First validated M1 candidate:
+- commit: `10387ede457cd66873321cbe23dee5125bf6b33b`
+- GitHub Actions run: `37583919255`
+- job: `m1-app-kernel`
+- Q0 compile: PASS
+- M0 registry + M1 kernel + existing main-entrypoint contracts: **14 passed**
+- Q1 nine-workspace launch characterization: **1 passed**
+- Q1 authoritative-state production shell/canonical save: **1 passed**
+- job conclusion: **success**
+
+Diff from M0 head contained only:
+- `.github/workflows/v2-m1-app-kernel.yml`
+- `docs/implementation/M1_APP_KERNEL_COMPOSITION_ROOT.md`
+- `src/full_album_maker/app_kernel.py`
+- `src/full_album_maker/main.py`
+- `tests/test_v2_app_kernel.py`
+
+No M2 lifecycle implementation was introduced.
+
+The evidence/status commit that records this PASS must rerun the same M1 workflow on
+its own final head before M2 starts.
