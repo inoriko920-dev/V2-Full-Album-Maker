@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from full_album_maker.editor_models import MediaAsset, ProjectDocument, SongInstance, TIMEBASE
 from full_album_maker.playlist_feature import get_active_audio_paths
-from full_album_maker.project import AudioItem, Project
+from full_album_maker.project import MediaItem, Project
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,7 +41,7 @@ def test_album_owner_keeps_legacy_active_audio_invariant_without_restore_bridge(
     project = Project()
     legacy_path = "/tmp/legacy-song.mp3"
     v2_only_path = "/tmp/v2-only-song.mp3"
-    project.audios.append(AudioItem(path=legacy_path, duration=120.0))
+    project.audios.append(MediaItem(path=legacy_path, duration=120.0))
 
     document = ProjectDocument.new_empty("M8 album bridge retirement")
     for path in (legacy_path, v2_only_path):
