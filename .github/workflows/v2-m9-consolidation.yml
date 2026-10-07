@@ -1,0 +1,157 @@
+name: V2 M9 Consolidation validation
+
+on:
+  push:
+    branches:
+      - impl-m9-consolidation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m9-consolidation:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_SCALE_FACTOR: '1'
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+      FAM_STEP11_NO_RECOVERY_PROMPT: '1'
+
+    steps:
+      - name: Checkout M9 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Linux Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Q0 compile
+        run: |
+          python -m compileall -q src \
+            tests/test_v2_feature_parity_registry.py \
+            tests/test_v2_app_kernel.py \
+            tests/test_v2_task_lifecycle.py \
+            tests/test_v2_project_persistence.py \
+            tests/test_v2_render_engine.py \
+            tests/test_v2_media_services.py \
+            tests/test_v2_beat_analysis.py \
+            tests/test_v2_workspace_registry.py \
+            tests/test_v2_legacy_bridge_retirement.py \
+            tests/test_v2_consolidation.py
+
+      - name: Q0 M0 through M9 contracts
+        run: |
+          python -m pytest -q \
+            tests/test_v2_feature_parity_registry.py \
+            tests/test_v2_app_kernel.py \
+            tests/test_v2_task_lifecycle.py \
+            tests/test_v2_project_persistence.py \
+            tests/test_v2_render_engine.py \
+            tests/test_v2_media_services.py \
+            tests/test_v2_beat_analysis.py \
+            tests/test_v2_workspace_registry.py \
+            tests/test_v2_legacy_bridge_retirement.py \
+            tests/test_v2_consolidation.py \
+            tests/test_editor_v2_main_entrypoint.py
+
+      - name: Q1 consolidated bootstrap and retirement parity
+        run: |
+          python -m pytest -q \
+            tests/test_v2_consolidation.py \
+            tests/test_v2_legacy_bridge_retirement.py \
+            tests/test_step04_album_integration.py \
+            tests/test_step05_timeline_ui.py
+
+      - name: Q1 nine route functional UI
+        run: |
+          python -m pytest -q \
+            tests/test_step01_foundation.py \
+            tests/test_step02_home_ui.py \
+            tests/test_step03_media_ui.py \
+            tests/test_step04_album_ui.py \
+            tests/test_step05_timeline_ui.py \
+            tests/test_step06_visual_ui.py \
+            tests/test_step07_template_ui.py \
+            tests/test_step08_spectrum_ui.py \
+            tests/test_step09_workspace_ui.py \
+            tests/test_step10_render_ui.py
+
+      - name: Q1 production navigation persistence render preview
+        run: |
+          python -m pytest -q \
+            tests/test_step11_e2e.py::test_nine_workspace_navigation_is_read_only_in_production_subprocess \
+            tests/test_step11_production_integration.py::test_step11_production_shell_uses_one_state_and_canonical_save \
+            tests/test_v2_project_persistence.py \
+            tests/test_v2_render_engine.py \
+            tests/test_v2_media_services.py
+
+      - name: Q1 responsive lifecycle and entrypoint regressions
+        run: |
+          python -m pytest -q \
+            tests/test_editor_v2_main_entrypoint.py \
+            tests/test_editor_v2_toolbar_responsive.py \
+            tests/test_ui_layout.py \
+            tests/test_ui_media_regressions.py \
+            tests/test_step11_close_lifecycle.py \
+            tests/test_ui_engine_hardening.py
+
+      - name: Q1 200-song long-album structural stress
+        run: |
+          python -m pytest -q \
+            tests/test_editor_v2_s12_performance.py::test_packed_200_song_three_hour_project_resolves_and_externalizes_graph \
+            tests/test_editor_v2_s12_performance.py::test_free_200_song_three_hour_project_resolves_and_uses_bounded_command
+
+  real-ffmpeg-m9:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: '1'
+      FAM_DISABLE_TEMPLATE_THUMBNAIL_RENDER: '1'
+      FAM_STEP09_PROVIDER: mock
+
+    steps:
+      - name: Checkout M9 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install targeted FFmpeg and Qt runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Q1 real render Spectrum and BeatAnalysis parity
+        timeout-minutes: 6
+        run: |
+          python -m pytest -q \
+            tests/test_editor_v2_render.py::test_real_ffmpeg_two_song_background_text_and_accurate_preview \
+            tests/test_editor_v2_s05_spectrum.py::test_real_silence_spectrum_and_accurate_preview_use_same_compiler \
+            tests/test_v2_beat_analysis.py::test_real_ffmpeg_detects_pulses_without_mutating_master_audio

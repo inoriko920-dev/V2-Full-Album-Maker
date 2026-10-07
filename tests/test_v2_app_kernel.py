@@ -102,12 +102,13 @@ def test_app_kernel_has_no_qt_subprocess_or_project_state_dependency() -> None:
     )
 
 
-def test_main_keeps_legacy_installers_before_gui_import_and_routes_through_kernel() -> None:
+def test_main_keeps_consolidated_runtime_before_gui_import_and_routes_through_kernel() -> None:
     source = (ROOT / "src" / "full_album_maker" / "main.py").read_text(encoding="utf-8")
 
     gui_import = "from full_album_maker.v14_window import run"
-    assert source.count("install_") >= 30
-    assert source.index("install_async_import()") < source.index(gui_import)
+    assert "from full_album_maker.production_runtime import install_production_runtime" in source
+    assert source.index("install_production_runtime()") < source.index(gui_import)
+    assert "install_async_import()" not in source
     assert "build_app_kernel(" in source
     assert "gui_runner=_run_legacy_gui" in source
     assert "portable_smoke_runner=_run_legacy_portable_smoke" in source
