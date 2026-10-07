@@ -8,7 +8,7 @@ import time
 
 from full_album_maker.media_library_model import MediaStatus, MediaType, stable_asset_id
 from full_album_maker.media_library_services import (
-    MediaSidecarStore, SidecarRecord, asset_from_item, collect_folder_paths,
+    MediaSidecarStore, SidecarMigrationConflict, SidecarRecord, asset_from_item, collect_folder_paths,
     media_type_for_path,
 )
 
@@ -295,3 +295,85 @@ def test_rebind_without_carry_loads_destination_fresh(tmp_path: Path) -> None:
 
     assert first.get("second-only").tags == ("fresh",)
     assert "first-only" not in first.records()
+
+
+
+def test_sidecar_migration_refuses_conflicting_destination_metadata(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "MigrationConflict.json"
+    project.write_text("{}", encoding="utf-8")
+    store = MediaSidecarStore(project)
+    old = SidecarRecord(
+        favorite=True,
+        tags=("old",),
+        description="metadata lama",
+    )
+    destination = SidecarRecord(
+        favorite=False,
+        tags=("destination",),
+        description="metadata tujuan",
+    )
+    store.set("old-id", old)
+    store.set("new-id", destination)
+
+    try:
+        store.migrate_asset_id("old-id", "new-id")
+    except SidecarMigrationConflict:
+        pass
+    else:
+        raise AssertionError("Konflik metadata relink harus diblokir")
+
+    latest = MediaSidecarStore(project)
+    assert latest.get("old-id") == old
+    assert latest.get("new-id") == destination
+
+
+def test_deferred_migration_conflict_with_other_instance_fails_without_data_loss(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DeferredMigrationConflict.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    old = SidecarRecord(tags=("old",), description="follow logical asset")
+    seed.set("old-id", old)
+
+    migrator = MediaSidecarStore(project)
+    migrator.load()
+    migrator.migrate_asset_id("old-id", "new-id", persist=False)
+
+    external = MediaSidecarStore(project)
+    destination = SidecarRecord(tags=("external",), description="new destination")
+    external.set("new-id", destination)
+
+    try:
+        migrator.save()
+    except SidecarMigrationConflict:
+        pass
+    else:
+        raise AssertionError("Deferred migration conflict harus gagal aman")
+
+    latest = MediaSidecarStore(project)
+    assert latest.get("old-id") == old
+    assert latest.get("new-id") == destination
+
+
+def test_sidecar_migration_deduplicates_identical_destination_record(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "IdenticalMigration.json"
+    project.write_text("{}", encoding="utf-8")
+    record = SidecarRecord(
+        favorite=True,
+        tags=("same",),
+        description="identical",
+    )
+    store = MediaSidecarStore(project)
+    store.set("old-id", record)
+    store.set("new-id", record)
+
+    store.migrate_asset_id("old-id", "new-id")
+
+    latest = MediaSidecarStore(project)
+    assert "old-id" not in latest.records()
+    assert latest.get("new-id") == record
