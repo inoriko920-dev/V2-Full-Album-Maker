@@ -26,6 +26,7 @@ from full_album_maker.render_executor_step10 import (
     Step10ProcessRunner,
     Step10RenderCancelled,
     Step10RenderError,
+    Step10SourceChangedError,
     apply_encoder_settings,
     apply_settings_to_snapshot,
     sanitize_render_log,
@@ -449,3 +450,125 @@ def test_executor_rejects_busy_output_before_ffmpeg_spawn(tmp_path: Path) -> Non
     assert "sedang dipakai render lain" in job.error_message
     assert executor._active_attempt is None
     assert not list(tmp_path.glob(".*.rendering.mp4"))
+
+
+
+class _WaitingRunner:
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.stopped = threading.Event()
+
+    def run(
+        self,
+        args,
+        *,
+        duration_seconds,
+        cancel_event=None,
+        on_metrics=None,
+        on_log=None,
+    ):
+        self.started.set()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if cancel_event is not None and cancel_event.is_set():
+                self.stopped.set()
+                raise Step10RenderCancelled("watchdog stopped fixture")
+            time.sleep(0.02)
+        raise AssertionError("source watchdog did not stop blocking render")
+
+
+def test_source_change_after_runner_never_publishes_final(tmp_path: Path) -> None:
+    base = _job(tmp_path)
+    settings = replace(base.settings, overwrite=True)
+    job = RenderJob(base.snapshot, settings)
+    final = settings.final_output
+    final.write_bytes(b"old-final")
+    source = Path(job.snapshot.document().media[0].locator)
+
+    class MutatingRunner(FakeRunner):
+        def run(self, args, **kwargs):
+            value = super().run(args, **kwargs)
+            source.write_bytes(b"source-mutated-after-render")
+            return value
+
+    executor = RenderExecutor(
+        _capability(),
+        runner=MutatingRunner(),
+        verifier=_verified,
+    )
+
+    with pytest.raises(Step10SourceChangedError, match="Source media berubah"):
+        executor.execute(job)
+
+    assert job.state == RenderJobState.FAILED
+    assert job.error_code == "SOURCE_CHANGED_DURING_RENDER"
+    assert final.read_bytes() == b"old-final"
+    assert job.verified_output == ""
+    assert not list(tmp_path.glob(".*.rendering.mp4"))
+
+
+def test_source_watchdog_stops_render_when_source_changes_mid_run(
+    tmp_path: Path,
+) -> None:
+    job = _job(tmp_path)
+    runner = _WaitingRunner()
+    executor = RenderExecutor(_capability(), runner=runner, verifier=_verified)
+    source = Path(job.snapshot.document().media[0].locator)
+    errors: list[BaseException] = []
+
+    def work() -> None:
+        try:
+            executor.execute(job)
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=work, name="source-mutation-render")
+    worker.start()
+    assert runner.started.wait(timeout=2.0)
+
+    time.sleep(0.15)
+    source.write_bytes(b"changed-while-render-running")
+
+    worker.join(timeout=5.0)
+    assert not worker.is_alive()
+    assert runner.stopped.is_set()
+    assert len(errors) == 1
+    assert isinstance(errors[0], Step10SourceChangedError)
+    assert job.state == RenderJobState.FAILED
+    assert job.error_code == "SOURCE_CHANGED_DURING_RENDER"
+    assert not job.settings.final_output.exists()
+
+
+def test_source_change_inside_verifier_blocks_transactional_publish(
+    tmp_path: Path,
+) -> None:
+    base = _job(tmp_path)
+    settings = replace(base.settings, overwrite=True)
+    job = RenderJob(base.snapshot, settings)
+    final = settings.final_output
+    final.write_bytes(b"old-final")
+    source = Path(job.snapshot.document().media[0].locator)
+
+    def mutate_inside_verifier(staged, *, settings, expected_duration_seconds, ffprobe):
+        result = _verified(
+            staged,
+            settings=settings,
+            expected_duration_seconds=expected_duration_seconds,
+            ffprobe=ffprobe,
+        )
+        source.unlink()
+        return result
+
+    executor = RenderExecutor(
+        _capability(),
+        runner=FakeRunner(),
+        verifier=mutate_inside_verifier,
+    )
+
+    with pytest.raises(Step10SourceChangedError, match="sebelum publish final"):
+        executor.execute(job)
+
+    assert job.state == RenderJobState.FAILED
+    assert job.error_code == "SOURCE_CHANGED_DURING_RENDER"
+    assert final.read_bytes() == b"old-final"
+    assert job.verified_output == ""
