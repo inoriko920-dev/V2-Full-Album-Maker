@@ -63,8 +63,10 @@ jobs:
           }
 
           $workflow = Get-Content '.github/workflows/step12-release-validation.yml' -Raw
-          if ($workflow -match 'build_portable\.ps1') { throw "Q5 dilarang rebuild portable ZIP." }
-          if ($workflow -match 'PyInstaller') { throw "Q5 dilarang menjalankan PyInstaller." }
+          $forbiddenBuild = 'build_' + 'portable.ps1'
+          $forbiddenPackager = 'Py' + 'Installer'
+          if ($workflow.Contains($forbiddenBuild)) { throw "Q5 dilarang rebuild portable ZIP." }
+          if ($workflow.Contains($forbiddenPackager)) { throw "Q5 dilarang menjalankan packager build." }
           if ($workflow -notmatch [regex]::Escape($env:Q4_CANDIDATE_SHA)) { throw "Q5 workflow tidak mengunci candidate SHA." }
           if ($workflow -notmatch [regex]::Escape($env:Q4_ZIP_SHA256)) { throw "Q5 workflow tidak mengunci ZIP SHA-256." }
 
