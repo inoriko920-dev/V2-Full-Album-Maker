@@ -128,7 +128,16 @@ def _cleanup_transaction_files(entries: list[dict[str, Any]], journal: Path) -> 
         backup_raw = str(entry.get("backup") or "")
         stage_raw = str(entry.get("stage") or "")
         if backup_raw:
-            _cleanup_path(Path(backup_raw))
+            backup = Path(backup_raw)
+            _cleanup_path(backup)
+            # A hard process/power loss during fallback copy can bypass the
+            # _backup_file() finally block. The transaction journal already
+            # records the intended backup name, so clean only temp copies tied
+            # to this exact transaction instead of sweeping unrelated files.
+            for candidate in backup.parent.glob(
+                f".{backup.name}.copying-*.tmp"
+            ):
+                _cleanup_path(candidate)
         if stage_raw:
             _cleanup_path(Path(stage_raw))
     _cleanup_path(journal)
