@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - quality-q4-windows-artifact
+    paths-ignore:
+      - "docs/**"
   workflow_dispatch:
 
 permissions:
