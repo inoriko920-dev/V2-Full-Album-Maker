@@ -565,8 +565,9 @@ class RenderExecutor:
             # Reserve the final path for the entire render, not just the tiny
             # publish phase. This prevents another app instance from rendering
             # the same destination and later overwriting a valid result.
-            target_lease = acquire_output_target_lease(final)
-            target_lease.__enter__()
+            lease_candidate = acquire_output_target_lease(final)
+            lease_candidate.__enter__()
+            target_lease = lease_candidate
             final.parent.mkdir(parents=True, exist_ok=True)
             fd, stage_name = tempfile.mkstemp(
                 prefix=f".{final.stem}.{job.attempt_id[:8]}.",
