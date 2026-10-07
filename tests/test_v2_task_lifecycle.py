@@ -102,7 +102,7 @@ def test_cooperative_worker_observes_cancel_without_project_callback() -> None:
         started.set()
         assert token.cancelled is False
         while not token.cancelled:
-            token._state._event.wait(0.01)
+            token.wait_cancelled(0.01)
         token.raise_if_cancelled()
         return "unreachable"
 
