@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import subprocess
+import sys
+import textwrap
 
 import pytest
 
@@ -9,6 +13,7 @@ from full_album_maker.editor_models import MediaAsset, ProjectDocument, SongInst
 from full_album_maker.render_center_model_step10 import (
     RenderJob,
     RenderJobState,
+    RenderMetrics,
     build_render_snapshot,
     settings_from_preset,
 )
@@ -293,3 +298,207 @@ def test_failed_quarantine_blocks_persistence_to_preserve_original(
     with pytest.raises(ValueError, match="dinonaktifkan"):
         store.save([])
     assert path.read_bytes() == original
+
+
+
+def test_two_live_queues_merge_new_jobs_without_lost_update(tmp_path: Path) -> None:
+    path = tmp_path / "queue_v1.json"
+    first = RenderQueue(RenderQueueStore(path))
+    second = RenderQueue(RenderQueueStore(path))
+    try:
+        job_a = _job(tmp_path, "instance-a")
+        _mark_ready(job_a)
+        first.enqueue(job_a)
+
+        # second still has the stale empty list it loaded at startup.
+        assert second.jobs == []
+        job_b = _job(tmp_path, "instance-b")
+        _mark_ready(job_b)
+        second.enqueue(job_b)
+
+        stored = RenderQueueStore(path).load()
+        assert {_job.attempt_id for _job in stored} == {
+            job_a.attempt_id,
+            job_b.attempt_id,
+        }
+        assert len(stored) == 2
+    finally:
+        first.close()
+        second.close()
+
+
+def test_live_owner_is_not_false_recovered_or_stage_deleted(tmp_path: Path) -> None:
+    path = tmp_path / "queue_v1.json"
+    owner = RenderQueue(RenderQueueStore(path))
+    observer = None
+    replacement = None
+    try:
+        job = _job(tmp_path, "live-owner")
+        _mark_ready(job)
+        job.transition(RenderJobState.STARTING)
+        job.transition(RenderJobState.RUNNING)
+        stage = (
+            tmp_path
+            / f".{job.settings.final_output.stem}.{job.attempt_id[:8]}.fixture.rendering.mp4"
+        )
+        stage.write_bytes(b"live-ffmpeg-stage")
+        owner.update(job)
+
+        observer = RenderQueue(RenderQueueStore(path))
+        persisted = next(
+            item for item in observer.jobs if item.attempt_id == job.attempt_id
+        )
+        assert persisted.state == RenderJobState.RUNNING
+        assert stage.read_bytes() == b"live-ffmpeg-stage"
+        assert observer.store.session_alive(owner.store.session_id) is True
+
+        owner.close()
+        replacement = RenderQueue(RenderQueueStore(path))
+        recovered = next(
+            item for item in replacement.jobs if item.attempt_id == job.attempt_id
+        )
+        assert recovered.state == RenderJobState.INTERRUPTED
+        assert recovered.error_code == "INTERRUPTED_ON_RESTART"
+        assert not stage.exists()
+    finally:
+        owner.close()
+        if observer is not None:
+            observer.close()
+        if replacement is not None:
+            replacement.close()
+
+
+def test_queued_attempt_claim_is_atomic_across_live_instances(tmp_path: Path) -> None:
+    path = tmp_path / "queue_v1.json"
+    first = RenderQueue(RenderQueueStore(path))
+    second = RenderQueue(RenderQueueStore(path))
+    try:
+        job = _job(tmp_path, "shared-queued")
+        _mark_ready(job)
+        first.enqueue(job)
+
+        claimed = first.claim_next_queued()
+        assert claimed is not None
+        assert claimed.attempt_id == job.attempt_id
+
+        # The second instance sees the QUEUED state, but the live owner lease
+        # makes the claim unavailable instead of starting the same job twice.
+        assert second.claim_next_queued() is None
+
+        first.close()
+        reclaimed = second.claim_next_queued()
+        assert reclaimed is not None
+        assert reclaimed.attempt_id == job.attempt_id
+    finally:
+        first.close()
+        second.close()
+
+
+def test_stale_instance_cannot_overwrite_attempt_owned_by_live_process(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "queue_v1.json"
+    owner = RenderQueue(RenderQueueStore(path))
+    stale = RenderQueue(RenderQueueStore(path))
+    try:
+        job = _job(tmp_path, "owned-active")
+        _mark_ready(job)
+        job.transition(RenderJobState.STARTING)
+        job.transition(RenderJobState.RUNNING)
+        owner.update(job)
+
+        stale.refresh()
+        stale_copy = next(
+            item for item in stale.jobs if item.attempt_id == job.attempt_id
+        )
+        stale_copy.metrics = RenderMetrics(percent=99.0)
+        with pytest.raises(ValueError, match="dimiliki instance aplikasi lain"):
+            stale.update(stale_copy)
+
+        persisted = RenderQueueStore(path).load()[0]
+        assert persisted.metrics.percent != 99.0
+        assert persisted.state == RenderJobState.RUNNING
+    finally:
+        owner.close()
+        stale.close()
+
+
+def test_real_second_process_does_not_recover_live_queue_owner(tmp_path: Path) -> None:
+    path = tmp_path / "queue_v1.json"
+    repo_root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(repo_root / "src") + (
+        os.pathsep + current_pythonpath if current_pythonpath else ""
+    )
+
+    holder = textwrap.dedent(
+        r"""
+        import sys
+        import time
+        from pathlib import Path
+        from full_album_maker.editor_models import MediaAsset, ProjectDocument, SongInstance, TIMEBASE
+        from full_album_maker.render_center_model_step10 import RenderJob, RenderJobState, build_render_snapshot, settings_from_preset
+        from full_album_maker.render_queue_step10 import RenderQueue, RenderQueueStore
+
+        root = Path(sys.argv[1])
+        store_path = Path(sys.argv[2])
+        source = root / "process-owner.wav"
+        source.write_bytes(b"audio")
+        doc = ProjectDocument.new_empty("Process Owner")
+        asset = MediaAsset(kind="audio", locator=str(source), original_name=source.name, source_duration_tick=5 * TIMEBASE)
+        doc.media.append(asset)
+        doc.playlist.entries.append(SongInstance(asset_id=asset.asset_id, display_title="owner", source_out_tick=5 * TIMEBASE))
+        doc.validate()
+        settings = settings_from_preset("youtube_1080p", filename="process-owner", output_folder=str(root))
+        job = RenderJob(build_render_snapshot(doc), settings)
+        job.transition(RenderJobState.PREFLIGHTING)
+        job.transition(RenderJobState.READY)
+        job.transition(RenderJobState.STARTING)
+        job.transition(RenderJobState.RUNNING)
+        stage = root / f".{settings.final_output.stem}.{job.attempt_id[:8]}.fixture.rendering.mp4"
+        stage.write_bytes(b"LIVE")
+        queue = RenderQueue(RenderQueueStore(store_path))
+        queue.update(job)
+        print(job.attempt_id, flush=True)
+        time.sleep(30)
+        """
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", holder, str(tmp_path), str(path)],
+        cwd=repo_root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    observer = None
+    replacement = None
+    try:
+        assert process.stdout is not None
+        attempt_id = process.stdout.readline().strip()
+        assert attempt_id
+
+        observer = RenderQueue(RenderQueueStore(path))
+        live = next(item for item in observer.jobs if item.attempt_id == attempt_id)
+        assert live.state == RenderJobState.RUNNING
+        stage = next(tmp_path.glob(f".process-owner.{attempt_id[:8]}.*.rendering.mp4"))
+        assert stage.read_bytes() == b"LIVE"
+
+        process.terminate()
+        process.wait(timeout=5)
+
+        replacement = RenderQueue(RenderQueueStore(path))
+        recovered = next(
+            item for item in replacement.jobs if item.attempt_id == attempt_id
+        )
+        assert recovered.state == RenderJobState.INTERRUPTED
+        assert not stage.exists()
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        if observer is not None:
+            observer.close()
+        if replacement is not None:
+            replacement.close()

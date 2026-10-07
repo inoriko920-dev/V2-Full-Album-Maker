@@ -116,6 +116,7 @@ def test_production_render_route_uses_step10_surfaces_without_project_mutation(t
             assert window.editor_workspace.document().content_signature() == before
 
             window._s10_async.close()
+            window._s10_queue.close()
             window.hide()
             window.deleteLater()
             app.processEvents()
@@ -177,6 +178,7 @@ def test_production_window_starts_with_corrupt_queue_quarantined() -> None:
             assert "dikarantina" in window.render_inspector_s10.warning.text()
 
             window._s10_async.close()
+            window._s10_queue.close()
             window.hide()
             window.deleteLater()
             app.processEvents()
