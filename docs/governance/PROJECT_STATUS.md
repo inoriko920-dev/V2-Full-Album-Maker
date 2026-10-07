@@ -4,7 +4,7 @@
 PLANNING
 
 ## Current STEP
-STEP 05 — Media, Preview, Cache, Timeline, dan Project Data
+STEP 06 — Render Engine, Processing Pipeline, dan Long-Album Reliability
 
 ## Gate Status
 - STEP 00: PASS
@@ -13,34 +13,37 @@ STEP 05 — Media, Preview, Cache, Timeline, dan Project Data
 - STEP 03: PASS
 - STEP 04: PASS
 - STEP 05: PASS
+- STEP 06: PASS
 
-## STEP 05 Final Data/Media Direction
-- ProjectDocument MediaAsset `asset_id` UUID is the sole canonical media identity.
-- File location (`locator` / `relative_path`) and source fingerprint are separate from domain identity.
-- Relink preserves asset UUID and all song/layer/project references.
-- ffprobe remains the initial canonical adapter behind MediaProbeService.
-- Import workers prepare proposals; project mutations commit through controlled EditorController/application transactions.
-- Accurate Preview remains the parity oracle for project composition.
-- Preview work is generation-aware, coalesced/cancellable, and off the UI thread.
-- Cache is disposable, versioned, namespaced, fingerprint-aware, quota-bounded, and never project truth.
-- Timeline remains time-based with TIMEBASE=240000 integer ticks per second.
-- Packed / Free / gap / crossfade semantics remain frozen.
-- Source VFR is media metadata/timestamp behavior, not a new project timeline clock.
-- ProjectDocument schema_version=2 remains frozen during initial V2 consolidation.
-- Extensions must be namespaced/versioned, JSON-only, validated, and technology-neutral.
-- Project migration is deterministic and yields one current-schema ProjectDocument or a typed failure.
-- Save/reopen correctness is normalized semantic equality, not byte-for-byte JSON formatting.
-- Missing media does not make the project corrupt; references remain available for relink and dependent render operations block only when required.
+## STEP 06 Final Render Direction
+- FFmpeg/ffprobe remain the canonical final-render and verification infrastructure.
+- One canonical RenderEngine path: immutable RenderSnapshot -> RenderPlan -> critical preflight -> CompilerPort -> ProcessSupervisor -> ffprobe verification -> staged sidecars -> transactional publish.
+- Render jobs never read mutable live project state after snapshot creation.
+- RenderPlan remains the canonical resolved timing view; no second renderer timeline model is allowed.
+- Executor always performs critical preflight again immediately before launch.
+- AUTO hardware encoding uses only runtime-verified hardware; software is the correctness fallback.
+- Existing Step08 -> V13 -> S11 -> FFmpegV2 compiler semantics are wrapped first, not rewritten.
+- Large filter graphs are externalized to attempt-owned script files to keep Windows command lines launch-safe.
+- Every attempt owns unique staging/work artifacts and never deletes unrelated files.
+- Job COMPLETED requires process success, ffprobe verification, sidecar staging, and successful transactional publication.
+- Persistent queue/retry semantics remain: active crash attempt -> INTERRUPTED; retry creates a new attempt and fresh preflight.
+- Pause/resume and crash-resume remain deferred.
+- One-pass rendering remains the default.
+- Segment/checkpoint rendering is deferred until stress evidence proves a real need and seam/parity safety can be demonstrated.
+- Long-album planning tiers are S/M/L/XL up to 200 songs / ~3 hours.
+- Existing 200-song/3-hour Packed and Free resolver/compiler fixture remains a regression floor.
+- Accurate Preview and final render must share compiler/composition semantics.
+- Beat response enters rendering only as deterministic derived input and never retimes master audio.
 
 ## Coding Status
 BLOCKED — planning phase.
 
-No STEP 05 source-code, dependency, UI, schema, renderer, workflow, or project-format implementation change was made.
+No STEP 06 source-code, dependency, UI, schema, renderer, queue, or project-format implementation change was made.
 
 ## Next STEP
-STEP 06 — Render Engine, Processing Pipeline, dan Long-Album Reliability.
+STEP 07 — Animation, Transition, Spectrum, Beat-Reactive Behavior, dan Preview/Render Parity.
 
-STEP 06 must design canonical render request/snapshot/compiler/process/preflight/verification/publication boundaries, long-album resource behavior, retry/resume policy, Windows command/filter-graph limits, and parity with Accurate Preview while preserving STEP 01–05 contracts.
+STEP 07 must design animation/keyframe/transition contracts, beat-response profiles, Spectrum behavior, deterministic Preview/Render parity, effect performance limits, and fallbacks while preserving STEP 01–06 contracts.
 
 ## Canonical References
 - Master planning DOCX.
@@ -50,11 +53,13 @@ STEP 06 must design canonical render request/snapshot/compiler/process/preflight
 - STEP 03 DOCX.
 - STEP 04 DOCX.
 - STEP 05 DOCX.
+- STEP 06 DOCX.
 - `docs/planning/STEP_01_AUDIT_SUMMARY.md`
 - `docs/planning/STEP_02_DECISIONS.md`
 - `docs/planning/STEP_03_ARCHITECTURE_DECISIONS.md`
 - `docs/planning/STEP_04_HARDENING_DECISIONS.md`
 - `docs/planning/STEP_05_MEDIA_TIMELINE_PROJECT_DATA_DECISIONS.md`
-- `docs/planning/STEP_05_ARTIFACT_INTEGRITY.txt`
+- `docs/planning/STEP_06_RENDER_PIPELINE_DECISIONS.md`
+- `docs/planning/STEP_06_ARTIFACT_INTEGRITY.txt`
 - `docs/governance/PROJECT_GOVERNANCE.md`
 - `docs/governance/AI_HANDOFF.md`
