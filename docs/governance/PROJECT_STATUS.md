@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-QUALITY — Q2 INTEGRATION
+QUALITY — Q3 INFRASTRUCTURE
 
 ## Current STEP
-Q2 — Integration Quality Gate — PASS
+Q3 — Infrastructure Quality Gate — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -37,7 +37,7 @@ Q2 — Integration Quality Gate — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1 through M9 are implemented and validated. Q2 Integration Quality Gate is PASS.
+M0/T1 through M9 are implemented and validated. Q2 and Q3 Quality Gates are PASS.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -144,14 +144,27 @@ Q2 result:
 
 Validated Q2 candidate `98a8f096990f1135989997f4047340c3b5bbb270` on Actions run `37601017717`: 123-file inventory PASS; full pytest 557 passed / 93 skipped; cross-workspace/session/lifecycle 60 passed; M0–M9 ownership smoke 72 passed / 4 skipped.
 
+Q3 result:
+- real Linux FFmpeg/ffprobe infrastructure matrix is green: 10 passed;
+- the first Q3 run correctly exposed that Ubuntu FFmpeg 6.1.1 does not support `-/filter_complex`; that test explicitly targets the pinned Windows FFmpeg and remains required for Q4 rather than being weakened or deleted;
+- deterministic functional UI capture matrix is green for all nine production workspaces at 1672x941 with per-route JSON reports and uploaded evidence;
+- pixel-match is explicitly NOT CLAIMED because exact golden binaries are not checked into this branch and STEP10 separates functional UI PASS from pixel-match PASS;
+- 200-song/~3-hour Packed and Free structural tests pass;
+- same-runner performance comparison against Q2 final head shows no >10% regression: Packed resolve -1.19%, Free resolve -0.61%, Packed compile -1.73%, Free compile -0.87%;
+- Python 3.11 full pytest is green: 557 passed, 93 skipped;
+- Q3 changes no production runtime source; only the Q3 workflow and benchmark runner were added;
+- Q4 Windows Artifact and Q5 Release were not started.
+
+Validated Q3 candidate `af98388eeb2c0eecb84bfe1cdbd44fdcad6d1385` on Actions run `37602494015`: real FFmpeg 10 passed; UI capture matrix 9/9 PASS; structural stress 2 passed; performance comparator PASS with no >10% regression; Python 3.11 full suite 557 passed / 93 skipped.
+
 ## Next Operational Step
-Q2 is PASS. On the next explicit turn:
-1. Start **Q3 — Infrastructure Quality Gate** from STEP 10 only.
-2. Run the approved real-FFmpeg tier evidence, UI capture matrix, and structural/performance benchmark evidence.
-3. Keep Q3 evidence tied to the exact candidate commit and investigate any >10% same-environment performance regression.
-4. Preserve all M0–M9 ownership boundaries and the Q2 full-regression result.
-5. Report Q3 PASS/FAIL before proceeding to Q4.
-6. Do not start Q4 Windows artifact build or Q5 stable release publication in the same turn.
+Q3 is PASS. On the next explicit turn:
+1. Start **Q4 — Windows Artifact Quality Gate** from STEP 10/11 only.
+2. Build the exact Windows x86_64 portable candidate from the approved Q3 head using the documented pinned runtime/dependencies/FFmpeg/font/PyInstaller path.
+3. Run the Windows-only `-/filter_complex` real-FFmpeg test against the exact shipping FFmpeg pin.
+4. Validate the extracted final ZIP in an isolated Unicode/apostrophe path with global Python/FFmpeg/API keys unavailable, plus checksum/supply-chain/provenance gates.
+5. Keep build validation separate from stable publication and report Q4 PASS/FAIL with exact artifact identity.
+6. Do not start Q5 stable release publication in the same turn.
 
 ## Canonical References
 - MASTER planning DOCX.

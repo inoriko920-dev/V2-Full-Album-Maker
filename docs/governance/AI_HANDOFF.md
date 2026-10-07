@@ -195,13 +195,26 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - Successful Actions run: `37601017717`.
 - Detailed records: `docs/implementation/Q2_INTEGRATION_QUALITY_GATE.md` and `docs/implementation/Q2_EVIDENCE.md`.
 
+## Q3 Infrastructure Quality Gate — PASS
+- Branch: `quality-q3-infrastructure`
+- Real Linux FFmpeg/ffprobe infrastructure matrix: 10 passed.
+- Initial Linux matrix exposed unsupported `-/filter_complex` on Ubuntu FFmpeg 6.1.1; the unchanged test explicitly targets the pinned Windows FFmpeg and is carried forward to Q4.
+- Fresh functional UI capture matrix: 9/9 workspaces PASS at 1672x941 with uploaded screenshots/reports.
+- Pixel-match is NOT CLAIMED; exact golden binaries are not present in this branch and STEP10 treats functional UI and pixel-match as separate claims.
+- 200-song/~3-hour structural gate: 2 passed.
+- Same-runner performance vs Q2 final baseline: no regression >10%; all four measured deltas are between -0.61% and -1.73%.
+- Python 3.11 full regression: 557 passed, 93 skipped.
+- Q3 changes no production runtime source.
+- Successful Actions run: `37602494015`.
+- Detailed records: `docs/implementation/Q3_INFRASTRUCTURE_QUALITY_GATE.md` and `docs/implementation/Q3_EVIDENCE.md`.
+
 ## Next Work
-- Q3 Infrastructure Quality Gate only.
-- Run approved real-FFmpeg tier evidence, UI capture matrix, and structural/performance benchmarks.
-- Preserve the Q2 557-pass full-regression baseline and complete M0–M9 ownership model.
-- Investigate rather than waive any real-infrastructure failure or >10% same-environment performance regression.
-- Do not proceed to Q4 Windows Artifact until Q3 PASS.
-- Do not start Q5 stable release work yet.
+- Q4 Windows Artifact Quality Gate only.
+- Build the exact documented Windows x86_64 portable candidate from the approved Q3 head.
+- Run the Windows-only external filter-script FFmpeg test against the exact shipping FFmpeg pin.
+- Validate extracted-ZIP isolation/smoke, checksums, pins, license/provenance, and other Q4 supply-chain gates.
+- Preserve Q2/Q3 evidence and do not change architecture/UI merely to make the artifact gate pass.
+- Do not publish a stable release; Q5 remains separate.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -219,4 +232,5 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - M9 Consolidation: PASS
 - STEP 03 M0–M9 architecture migration: COMPLETE
 - Q2 Integration Quality Gate: PASS
-- Next operational action: Q3 Infrastructure Quality Gate only; then report gate before Q4.
+- Q3 Infrastructure Quality Gate: PASS
+- Next operational action: Q4 Windows Artifact Quality Gate only; then report gate before Q5.
