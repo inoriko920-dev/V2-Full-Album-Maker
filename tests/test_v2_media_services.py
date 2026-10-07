@@ -260,6 +260,7 @@ def test_media_preview_cache_close_stops_workers_and_rejects_new_requests(tmp_pa
     assert cache.job_count == 0
 
 
+# v2.0.1 regression guard: no preview completion is allowed after cache close.
 def test_media_preview_cache_close_suppresses_inflight_completion(tmp_path: Path, monkeypatch) -> None:
     manager = _media_cache_manager(tmp_path / "cache-running", version=10)
     cache = MediaPreviewCache(workers=1, cache_manager=manager)
