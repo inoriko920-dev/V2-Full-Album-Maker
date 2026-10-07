@@ -9,8 +9,8 @@ from PySide6.QtWidgets import QFileDialog
 
 from . import ui as ui_module
 from . import visual_feature as visual_feature_module
+from .media import probe_duration
 from .media_probe_service import (
-    DEFAULT_MEDIA_PROBE_SERVICE,
     MediaProbeService,
     current_media_probe_service,
 )
@@ -18,6 +18,27 @@ from .project import MediaItem
 
 _installed = False
 _originals: dict[str, Any] = {}
+
+
+def _legacy_duration_probe(source: str, kind: str | None) -> float:
+    # Compatibility surface for direct legacy-window tests/extensions. Production
+    # windows launched through AppKernel capture the exact M5 service instead.
+    return float(probe_duration(source, kind))
+
+
+def _legacy_image_probe(source: str):
+    return visual_feature_module.probe_image(source)
+
+
+def _legacy_audio_tag_probe(source: str) -> tuple[str, str]:
+    return visual_feature_module.probe_audio_tags(source)
+
+
+LEGACY_ASYNC_IMPORT_PROBE_SERVICE = MediaProbeService(
+    duration_probe=_legacy_duration_probe,
+    image_probe=_legacy_image_probe,
+    audio_tag_probe=_legacy_audio_tag_probe,
+)
 
 
 class _ImportBridge(QObject):
@@ -48,7 +69,7 @@ def _probe_one(
     path: str,
     service: MediaProbeService | None = None,
 ) -> MediaItem:
-    probe_service = service or current_media_probe_service() or DEFAULT_MEDIA_PROBE_SERVICE
+    probe_service = service or current_media_probe_service() or LEGACY_ASYNC_IMPORT_PROBE_SERVICE
     result = probe_service.probe(path, kind)
 
     if kind == "video":
@@ -102,7 +123,7 @@ def _start_import(window, kind: str, paths: list[str]) -> None:
     probe_service = (
         getattr(window, "_m5_media_probe_service", None)
         or current_media_probe_service()
-        or DEFAULT_MEDIA_PROBE_SERVICE
+        or LEGACY_ASYNC_IMPORT_PROBE_SERVICE
     )
     window._import_job_count += 1
     window.log.appendPlainText(
@@ -198,7 +219,7 @@ def _finish_import(self, payload: dict[str, Any]) -> None:
 
 def _patched_init(self, *args, **kwargs) -> None:
     self._m5_media_probe_service = (
-        current_media_probe_service() or DEFAULT_MEDIA_PROBE_SERVICE
+        current_media_probe_service() or LEGACY_ASYNC_IMPORT_PROBE_SERVICE
     )
     self._import_pending_keys: set[str] = set()
     self._import_job_count = 0
