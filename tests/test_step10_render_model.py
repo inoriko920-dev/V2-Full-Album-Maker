@@ -142,3 +142,24 @@ def test_retry_keeps_logical_job_id_but_creates_new_attempt(tmp_path: Path) -> N
     assert retry.attempt_id != job.attempt_id
     assert retry.state == RenderJobState.DRAFT
     assert retry.snapshot.snapshot_hash == job.snapshot.snapshot_hash
+
+
+
+def test_finalizing_remains_cancelable_before_publish_commit(tmp_path: Path) -> None:
+    doc = _document(tmp_path)
+    settings = settings_from_preset(
+        "youtube_1080p",
+        filename="finalizing-cancel",
+        output_folder=str(tmp_path),
+    )
+    job = RenderJob(build_render_snapshot(doc), settings)
+    job.transition(RenderJobState.PREFLIGHTING)
+    job.transition(RenderJobState.READY)
+    job.transition(RenderJobState.STARTING)
+    job.transition(RenderJobState.RUNNING)
+    job.transition(RenderJobState.FINALIZING)
+
+    assert job.can_cancel is True
+    job.transition(RenderJobState.CANCELLED)
+    assert job.state == RenderJobState.CANCELLED
+    assert job.finished_at
