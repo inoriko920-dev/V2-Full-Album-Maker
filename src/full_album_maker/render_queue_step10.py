@@ -241,13 +241,84 @@ def job_from_dict(value: dict) -> RenderJob:
 class RenderQueueStore:
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path is not None else data_dir() / "render" / "queue_v1.json"
+        self.lock_path = self.path.with_name(f".{self.path.name}.lock")
         self.last_recovery_warning = ""
         self.quarantined_path: Path | None = None
         self.persistence_blocked = False
+        self.session_id = ""
+        self._session_handle = None
+        self._session_path: Path | None = None
 
-    def load(self) -> list[RenderJob]:
+    def start_session(self) -> str:
+        if self._session_handle is not None:
+            return self.session_id
+        self.session_id = uuid4().hex
+        path = self.path.with_name(f"{_SESSION_LOCK_PREFIX}{self.session_id}.lock")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        handle = os.fdopen(fd, "r+b", buffering=0)
+        if os.fstat(handle.fileno()).st_size == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        if not _lock_handle(handle):
+            handle.close()
+            raise ValueError("Gagal memperoleh session lease Render Queue.")
+        self._session_handle = handle
+        self._session_path = path
+        return self.session_id
+
+    def close_session(self) -> None:
+        handle = self._session_handle
+        path = self._session_path
+        self._session_handle = None
+        self._session_path = None
+        if handle is not None:
+            _unlock_handle(handle)
+            handle.close()
+        if path is not None:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _owner_path(self, owner_session_id: str) -> Path:
+        return self.path.with_name(f"{_SESSION_LOCK_PREFIX}{owner_session_id}.lock")
+
+    def session_alive(self, owner_session_id: str) -> bool:
+        owner = str(owner_session_id or "")
+        if not owner:
+            return False
+        if owner == self.session_id and self._session_handle is not None:
+            return True
+        path = self._owner_path(owner)
+        if not path.exists():
+            return False
+        try:
+            fd = os.open(path, os.O_RDWR)
+            handle = os.fdopen(fd, "r+b", buffering=0)
+        except OSError:
+            # Fail closed: an existing lease file that cannot be inspected must
+            # not be treated as a dead owner and recovered destructively.
+            return True
+        try:
+            handle.seek(0)
+            if not _lock_handle(handle):
+                return True
+            _unlock_handle(handle)
+        finally:
+            handle.close()
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+    def _load_records_unlocked(
+        self,
+    ) -> tuple[list[RenderJob], dict[tuple[str, str], str]]:
         if not self.path.exists():
-            return []
+            return [], {}
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -258,14 +329,54 @@ class RenderQueueStore:
         if not isinstance(values, list):
             raise ValueError("Daftar render job tidak valid.")
         jobs: list[RenderJob] = []
+        owners: dict[tuple[str, str], str] = {}
         for index, item in enumerate(values):
             try:
-                jobs.append(job_from_dict(item))
+                job = job_from_dict(item)
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(
                     f"Render job persistence rusak pada item #{index + 1}: {exc}"
                 ) from exc
+            jobs.append(job)
+            owner = str(item.get("owner_session_id", "") or "")
+            if owner:
+                owners[_job_key(job)] = owner
+        return jobs, owners
+
+    def load(self) -> list[RenderJob]:
+        jobs, _ = self._load_records_unlocked()
         return jobs
+
+    def _write_records_unlocked(
+        self,
+        jobs: Iterable[RenderJob],
+        owners: dict[tuple[str, str], str] | None = None,
+    ) -> list[RenderJob]:
+        if self.persistence_blocked:
+            raise ValueError(
+                "Persistence Render Queue dinonaktifkan karena store rusak "
+                "belum berhasil dikarantina."
+            )
+        owners = owners or {}
+        values = _bounded_history(jobs)
+        serialized = []
+        for job in values:
+            item = job_to_dict(job)
+            owner = str(owners.get(_job_key(job), "") or "")
+            if owner:
+                item["owner_session_id"] = owner
+            serialized.append(item)
+        payload = {
+            "format": QUEUE_FORMAT,
+            "version": QUEUE_VERSION,
+            "jobs": serialized,
+        }
+        atomic_write_text(
+            self.path,
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return values
 
     def _quarantine_corrupt_store(self, reason: Exception) -> Path | None:
         if not self.path.exists():
@@ -307,59 +418,13 @@ class RenderQueueStore:
         return quarantine
 
     def save(self, jobs: Iterable[RenderJob]) -> None:
-        if self.persistence_blocked:
-            raise ValueError(
-                "Persistence Render Queue dinonaktifkan karena store rusak "
-                "belum berhasil dikarantina."
-            )
-        values = _bounded_history(jobs)
-        payload = {
-            "format": QUEUE_FORMAT,
-            "version": QUEUE_VERSION,
-            "jobs": [job_to_dict(job) for job in values],
-        }
-        atomic_write_text(
-            self.path,
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        """Compatibility full save used by focused tests/tools.
 
-    def _recover_jobs(
-        self,
-        jobs: list[RenderJob],
-    ) -> tuple[list[RenderJob], tuple[str, ...]]:
-        changed: list[str] = []
-        for job in jobs:
-            if job.state not in _RECOVER_AS_INTERRUPTED:
-                continue
-            # Recovery is intentionally not a normal state transition: the old
-            # process no longer exists, so claiming resume semantics would be false.
-            job.state = RenderJobState.INTERRUPTED
-            job.error_code = "INTERRUPTED_ON_RESTART"
-            job.error_message = (
-                "Aplikasi berhenti sebelum attempt render selesai; resume otomatis "
-                "tidak diklaim aman. Gunakan Retry untuk attempt baru."
-            )
-            if not job.finished_at:
-                from .render_center_model_step10 import utc_now_iso
-                job.finished_at = utc_now_iso()
-            changed.append(job.attempt_id)
-        removed = self.cleanup_orphan_stages(jobs)
-        if changed or removed:
-            self.save(jobs)
-        return jobs, tuple(changed)
-
-    def recover(self) -> tuple[list[RenderJob], tuple[str, ...]]:
-        return self._recover_jobs(self.load())
-
-    def recover_for_startup(self) -> tuple[list[RenderJob], tuple[str, ...]]:
-        """Keep application startup available while preserving corrupt bytes."""
-        try:
-            jobs = self.load()
-        except ValueError as exc:
-            self._quarantine_corrupt_store(exc)
-            return [], ()
-        return self._recover_jobs(jobs)
+        Production RenderQueue uses merge_changes() so another live instance's
+        disk-only jobs can never be dropped by a stale in-memory list.
+        """
+        with _queue_file_lock(self.lock_path):
+            self._write_records_unlocked(jobs)
 
     @staticmethod
     def cleanup_orphan_stages(jobs: Iterable[RenderJob]) -> int:
@@ -370,7 +435,7 @@ class RenderQueueStore:
             folder = final.parent
             if not folder.is_dir():
                 continue
-            pattern = f".{final.stem}.*.rendering.mp4"
+            pattern = f".{final.stem}.{job.attempt_id[:8]}.*.rendering.mp4"
             for candidate in folder.glob(pattern):
                 resolved = candidate.resolve(strict=False)
                 if resolved in seen:
@@ -382,6 +447,135 @@ class RenderQueueStore:
                 except OSError:
                     pass
         return removed
+
+    def _recover_dead_owners_unlocked(
+        self,
+        jobs: list[RenderJob],
+        owners: dict[tuple[str, str], str],
+    ) -> tuple[tuple[str, ...], bool]:
+        changed: list[str] = []
+        dirty = False
+        dead_jobs: list[RenderJob] = []
+        for job in jobs:
+            key = _job_key(job)
+            owner = str(owners.get(key, "") or "")
+            if job.state in _RECOVER_AS_INTERRUPTED:
+                if owner and self.session_alive(owner):
+                    continue
+                job.state = RenderJobState.INTERRUPTED
+                job.error_code = "INTERRUPTED_ON_RESTART"
+                job.error_message = (
+                    "Aplikasi pemilik attempt sudah tidak aktif; resume otomatis "
+                    "tidak diklaim aman. Gunakan Retry untuk attempt baru."
+                )
+                if not job.finished_at:
+                    from .render_center_model_step10 import utc_now_iso
+                    job.finished_at = utc_now_iso()
+                owners.pop(key, None)
+                changed.append(job.attempt_id)
+                dead_jobs.append(job)
+                dirty = True
+                continue
+            if job.state == RenderJobState.QUEUED and owner and not self.session_alive(owner):
+                # A process can die after atomically claiming a queued job but
+                # before the worker changes state. Release that claim for another
+                # live instance without falsely interrupting the queued work.
+                owners.pop(key, None)
+                dirty = True
+
+        if dead_jobs and self.cleanup_orphan_stages(dead_jobs):
+            dirty = True
+        return tuple(changed), dirty
+
+    def recover(self) -> tuple[list[RenderJob], tuple[str, ...]]:
+        self.start_session()
+        with _queue_file_lock(self.lock_path):
+            jobs, owners = self._load_records_unlocked()
+            changed, dirty = self._recover_dead_owners_unlocked(jobs, owners)
+            if dirty:
+                jobs = self._write_records_unlocked(jobs, owners)
+            return jobs, changed
+
+    def recover_for_startup(self) -> tuple[list[RenderJob], tuple[str, ...]]:
+        """Recover only attempts whose owning process lease is provably dead."""
+        self.start_session()
+        with _queue_file_lock(self.lock_path):
+            try:
+                jobs, owners = self._load_records_unlocked()
+            except ValueError as exc:
+                self._quarantine_corrupt_store(exc)
+                return [], ()
+            changed, dirty = self._recover_dead_owners_unlocked(jobs, owners)
+            if dirty:
+                jobs = self._write_records_unlocked(jobs, owners)
+            return jobs, changed
+
+    def merge_changes(
+        self,
+        changes: Iterable[tuple[RenderJob, str]],
+    ) -> list[RenderJob]:
+        """Merge only locally changed attempts into the latest on-disk queue."""
+        self.start_session()
+        incoming = list(changes)
+        with _queue_file_lock(self.lock_path):
+            disk_jobs, owners = self._load_records_unlocked()
+            index = {_job_key(job): pos for pos, job in enumerate(disk_jobs)}
+            for job, requested_owner in incoming:
+                key = _job_key(job)
+                existing_owner = str(owners.get(key, "") or "")
+                if (
+                    existing_owner
+                    and existing_owner != self.session_id
+                    and self.session_alive(existing_owner)
+                ):
+                    raise ValueError(
+                        "Attempt Render Queue sedang dimiliki instance aplikasi lain; "
+                        "state lokal yang stale tidak boleh menimpanya."
+                    )
+                if key in index:
+                    disk_jobs[index[key]] = job
+                else:
+                    index[key] = len(disk_jobs)
+                    disk_jobs.append(job)
+                owner = str(requested_owner or "")
+                if owner:
+                    owners[key] = owner
+                else:
+                    owners.pop(key, None)
+            return self._write_records_unlocked(disk_jobs, owners)
+
+    def claim_next_queued(
+        self,
+    ) -> tuple[list[RenderJob], RenderJob | None]:
+        """Atomically claim one queued attempt so two instances cannot start it."""
+        self.start_session()
+        with _queue_file_lock(self.lock_path):
+            jobs, owners = self._load_records_unlocked()
+            _changed, dirty = self._recover_dead_owners_unlocked(jobs, owners)
+
+            # A genuinely live active attempt anywhere in the shared queue owns
+            # the global queue slot. Do not start another queued attempt.
+            if any(job.state in _LIVE_ACTIVE_STATES for job in jobs):
+                if dirty:
+                    jobs = self._write_records_unlocked(jobs, owners)
+                return jobs, None
+
+            selected: RenderJob | None = None
+            for job in jobs:
+                if job.state != RenderJobState.QUEUED:
+                    continue
+                key = _job_key(job)
+                owner = str(owners.get(key, "") or "")
+                if owner and owner != self.session_id and self.session_alive(owner):
+                    continue
+                owners[key] = self.session_id
+                selected = job
+                dirty = True
+                break
+
+            if dirty:
+                jobs = self._write_records_unlocked(jobs, owners)
+            return jobs, selected
 
 
 class RenderQueue:
