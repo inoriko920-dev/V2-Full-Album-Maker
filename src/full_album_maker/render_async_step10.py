@@ -8,14 +8,9 @@ from PySide6.QtCore import QObject, Signal
 
 from .editor_models import ProjectDocument
 from .render_center_model_step10 import RenderJob, RenderSettings
-from .render_executor_step10 import RenderExecutor, Step10RenderCancelled
-from .render_preflight_step10 import (
-    FFmpegCapability,
-    hardware_encoder,
-    probe_ffmpeg,
-    run_preflight,
-    verify_encoder_runtime,
-)
+from .render_engine import RenderEngine, current_render_engine
+from .render_executor_step10 import Step10RenderCancelled
+from .render_preflight_step10 import FFmpegCapability
 
 
 class RenderAsyncBridge(QObject):
@@ -28,25 +23,26 @@ class RenderAsyncBridge(QObject):
     render_failed = Signal(str, str, str, str)  # job, attempt, code, message
     busy_changed = Signal(bool)
 
-    def __init__(self, *, workers: int = 2, parent: QObject | None = None) -> None:
+    def __init__(self, *, workers: int = 2, render_engine: RenderEngine | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._executor = ThreadPoolExecutor(max_workers=max(2, int(workers)), thread_name_prefix="fam-render-center")
         self._lock = threading.Lock()
         self._preflight_generation = 0
         self._active_attempt = ""
         self._cancel_event: threading.Event | None = None
+        # During normal production startup AppKernel binds its single M4 engine
+        # in a context while the legacy window is constructed. Tests/legacy
+        # callers may still inject an engine explicitly.
+        self._render_engine = render_engine or current_render_engine() or RenderEngine()
+
+    @property
+    def render_engine(self) -> RenderEngine:
+        return self._render_engine
 
     def _capability_for_settings(self, settings: RenderSettings) -> FFmpegCapability:
-        capability = probe_ffmpeg()
-        if settings.hardware_mode == "software":
-            return capability
-        try:
-            candidate = hardware_encoder(settings.video_codec)
-        except Exception:
-            return capability
-        if candidate in capability.encoders:
-            capability = verify_encoder_runtime(capability, candidate)
-        return capability
+        # Compatibility helper retained for existing callers/tests. Policy now
+        # belongs to RenderEngine rather than the Qt bridge.
+        return self._render_engine.capability_for_settings(settings)
 
     def request_preflight(self, document: ProjectDocument, settings: RenderSettings) -> int:
         with self._lock:
@@ -63,8 +59,9 @@ class RenderAsyncBridge(QObject):
 
     def _run_preflight(self, token: int, document: ProjectDocument, settings: RenderSettings) -> None:
         try:
-            capability = self._capability_for_settings(settings)
-            report = run_preflight(document, settings, capability=capability)
+            result = self._render_engine.preflight(document, settings)
+            report = result.report
+            capability = result.capability
         except Exception as exc:
             with self._lock:
                 current = self._preflight_generation
@@ -93,8 +90,7 @@ class RenderAsyncBridge(QObject):
             # Capability is re-probed here even when the UI preflight already
             # passed. RenderExecutor then performs the critical snapshot/media/
             # disk/output preflight again immediately before start.
-            capability = self._capability_for_settings(job.settings)
-            result = RenderExecutor(capability).execute(
+            result = self._render_engine.execute(
                 job,
                 cancel_event=cancel_event,
                 on_metrics=lambda value: self.metrics_ready.emit(job.job_id, job.attempt_id, value),
