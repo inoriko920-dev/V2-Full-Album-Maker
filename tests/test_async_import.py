@@ -10,7 +10,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from full_album_maker.async_import import install_async_import, uninstall_async_import
+from full_album_maker.async_import import (
+    _probe_one,
+    install_async_import,
+    uninstall_async_import,
+)
+from full_album_maker.media_probe_service import MediaProbeService
 from full_album_maker.controller import ProjectController
 from full_album_maker.engine_hardening import install_engine_hardening, uninstall_engine_hardening
 from full_album_maker.playlist_feature import install_feature, uninstall_feature
@@ -326,4 +331,57 @@ def test_pending_import_continues_when_window_close_is_cancelled(tmp_path, monke
 
     assert len(window.project.videos) == 1
     assert Path(window.project.videos[0].path).name == "cancel-close-video.mp4"
+    _close_without_dirty_prompt(window)
+
+
+
+def test_probe_rejects_source_that_changes_while_metadata_is_read(tmp_path):
+    source = tmp_path / "mutating.mp4"
+    source.write_bytes(b"before-probe")
+
+    def mutating_duration(path, kind=None):
+        assert kind == "video"
+        source.write_bytes(b"changed-during-probe-and-longer")
+        return 5.0
+
+    service = MediaProbeService(
+        duration_probe=mutating_duration,
+        image_probe=lambda path: {},
+        audio_tag_probe=lambda path: ("", ""),
+    )
+
+    with pytest.raises(RuntimeError, match="berubah saat probe"):
+        service.probe(source, "video")
+
+
+def test_async_import_drops_item_if_source_changes_after_probe_before_adopt(
+    tmp_path,
+):
+    source = tmp_path / "delayed-adopt.mp4"
+    source.write_bytes(b"stable-at-probe")
+    service = MediaProbeService(
+        duration_probe=lambda path, kind=None: 4.0,
+        image_probe=lambda path: {},
+        audio_tag_probe=lambda path: ("", ""),
+    )
+    item = _probe_one("video", str(source), service)
+
+    window = MainWindow()
+    project = window.project
+    source.write_bytes(b"changed-before-ui-adopt-longer")
+
+    window._finish_media_import(
+        {
+            "kind": "video",
+            "paths": [str(source)],
+            "items": [item],
+            "errors": [],
+            "project_ref": project,
+        }
+    )
+
+    assert project.videos == []
+    log = window.log.toPlainText().casefold()
+    assert "source berubah" in log
+    assert "tidak diadopsi" in log
     _close_without_dirty_prompt(window)
