@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QMenu, QPushButton, QSizePolicy
 
 from .foundation_components import FAMButton
 from .foundation_tokens import TOKENS
-from .media_library_services import MediaSidecarStore
+from .media_library_services import MediaSidecarStore, canonical_path_key
 from .media_preview_cache import PreviewResult
 from .preview_engine import DEFAULT_PREVIEW_ENGINE, current_preview_engine
 from .media_workspace import COLLECTIONS, MediaPreviewPlaceholder, MediaWorkspace, MediaInspectorWidget
@@ -408,6 +408,23 @@ def _collection(self, asset_id: str, collection: str, enabled: bool) -> None:
 def _preview_ready(self, result: PreviewResult) -> None:
     if result.generation != self._s03_preview_cache.generation:
         return
+    asset = self._s03_index.get(str(result.asset_id))
+    if asset is None:
+        return
+    if result.source_key and result.source_key != canonical_path_key(asset.path):
+        return
+    expected = self._m5_preview_engine.media_preview_path(asset)
+    if (
+        result.source_fingerprint
+        and expected.stem != result.source_fingerprint
+    ):
+        return
+    if result.path:
+        try:
+            if Path(result.path).resolve(strict=False) != expected.resolve(strict=False):
+                return
+        except OSError:
+            return
     self.media_workspace._step03_preview_result(result)
     if result.path:
         self.media_inspector.set_preview_path(result.asset_id, result.path)
@@ -482,14 +499,25 @@ def _refresh_media(self, reset=False) -> None:
 
 def _relinked(self, payload) -> None:
     old_path = str(payload.get("old", "")) if isinstance(payload, dict) else ""
-    if old_path:
-        self._m5_preview_engine.invalidate_media_source(old_path)
-    _originals["relinked"](self, payload)
+
+    # Invalidate worker generation before removing old cache or refreshing the
+    # project. Otherwise an old worker can finish in the small relink window and
+    # recreate the cache that was just invalidated.
     if hasattr(self, "_s03_preview_cache"):
         self._s03_preview_cache.reset()
     if hasattr(self, "media_workspace"):
         self.media_workspace._step03_preview_paths.clear()
         self.media_workspace._step03_preview_failed.clear()
+    inspector = getattr(self, "media_inspector", None)
+    if inspector is not None and getattr(inspector, "preview", None) is not None:
+        inspector.preview.clear()
+
+    if old_path:
+        self._m5_preview_engine.invalidate_media_source(old_path)
+
+    _originals["relinked"](self, payload)
+
+    if hasattr(self, "media_workspace"):
         QTimer.singleShot(0, self.media_workspace._step03_request_nearby)
 
 
