@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from . import async_import as async_mod, visual_feature as visual_mod
 from .media_library_model import MediaAddToAlbumCommand, MediaLibraryIndex, MediaType, stable_asset_id
-from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
+from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, SidecarWriteConflict, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
 from .media_workspace import MediaContextWidget, MediaInspectorWidget, MediaTimelinePreviewCanvas, MediaWorkspace
 
 _installed=False; _originals:dict[str,Any]={}
@@ -154,11 +154,17 @@ def _cancel(self): self._s03_cancel.set(); self.media_workspace.set_import_progr
 def _favorite(self,asset_id,value):
     if not self._s03_index.get(asset_id):return
     try:self._s03_store.update(asset_id,favorite=value,persist=bool(self._foundation_project_path))
+    except SidecarWriteConflict as exc:
+        QMessageBox.warning(self,'Metadata Media',f'Metadata berubah di instance lain:\n{exc}')
+        self._s03_refresh(True);return
     except OSError as exc:QMessageBox.warning(self,'Metadata Media',f'Favorit tidak dapat disimpan:\n{exc}');return
     self._s03_refresh(False)
 def _metadata(self,asset_id,tags,description):
     if not self._s03_index.get(asset_id):return
     try:self._s03_store.update(asset_id,tags=tags,description=description,persist=bool(self._foundation_project_path))
+    except SidecarWriteConflict as exc:
+        QMessageBox.warning(self,'Metadata Media',f'Metadata berubah di instance lain:\n{exc}')
+        self._s03_refresh(True);return
     except OSError as exc:QMessageBox.warning(self,'Metadata Media',f'Metadata tidak dapat disimpan:\n{exc}');return
     self._s03_refresh(False)
 def _reveal(self,asset_id):

@@ -119,6 +119,62 @@ class SidecarUnsupportedVersion(SidecarStoreError):
     """Raised when a newer/unknown sidecar schema must not be overwritten."""
 
 
+class SidecarWriteConflict(SidecarStoreError):
+    """Raised when a stale instance would overwrite a newer same-field edit."""
+
+
+_SIDECAR_RECORD_FIELDS = (
+    "favorite",
+    "tags",
+    "description",
+    "collections",
+    "imported_at",
+)
+
+
+def _normalize_requested_sidecar_fields(
+    *,
+    favorite: bool | None,
+    tags: Iterable[str] | None,
+    description: str | None,
+    collections: Iterable[str] | None,
+    imported_at: float | None,
+) -> dict[str, object]:
+    requested: dict[str, object] = {}
+    if favorite is not None:
+        requested["favorite"] = bool(favorite)
+    if tags is not None:
+        requested["tags"] = normalize_tags(tags)
+    if description is not None:
+        requested["description"] = str(description).strip()
+    if collections is not None:
+        requested["collections"] = normalize_tags(collections)
+    if imported_at is not None:
+        requested["imported_at"] = max(0.0, float(imported_at))
+    return requested
+
+
+def _assert_no_same_field_conflict(
+    asset_id: str,
+    baseline: "SidecarRecord",
+    latest: "SidecarRecord",
+    requested: Mapping[str, object],
+) -> None:
+    conflicts: list[str] = []
+    for field_name, intended in requested.items():
+        before = getattr(baseline, field_name)
+        on_disk = getattr(latest, field_name)
+        if on_disk != before and intended != on_disk:
+            conflicts.append(field_name)
+    if conflicts:
+        raise SidecarWriteConflict(
+            "Metadata asset berubah di instance aplikasi lain pada field "
+            + ", ".join(conflicts)
+            + f" ({asset_id}). Perubahan lokal tidak ditulis agar metadata terbaru "
+              "tidak tertimpa; refresh metadata lalu coba lagi."
+        )
+
+
 def _validate_sidecar_record(asset_id: object, value: object) -> None:
     if not isinstance(asset_id, str) or not asset_id:
         raise SidecarCorruptionError("ID asset sidecar tidak valid.")
@@ -473,20 +529,43 @@ class MediaSidecarStore:
         persist: bool = True,
     ) -> SidecarRecord:
         key = str(asset_id)
+        requested = _normalize_requested_sidecar_fields(
+            favorite=favorite,
+            tags=tags,
+            description=description,
+            collections=collections,
+            imported_at=imported_at,
+        )
         target = self.path
         if persist and target is not None:
+            # Keep the caller's last-known record as the optimistic baseline.
+            # A lock serializes the read/check/write, so a same-field edit that
+            # landed after this instance's last refresh cannot be overwritten.
+            if not self._loaded:
+                self.load()
+            baseline = self._records.get(key, SidecarRecord())
             with _sidecar_file_lock(target):
-                latest = self._apply_local_pending(
-                    self._read_latest_for_write(target)
+                disk_latest = self._read_latest_for_write(target)
+                rebuilding_after_quarantine = (
+                    self.quarantined_path is not None
+                    and not target.exists()
                 )
+                disk_current = disk_latest.get(key, SidecarRecord())
+                if not rebuilding_after_quarantine:
+                    _assert_no_same_field_conflict(
+                        key,
+                        baseline,
+                        disk_current,
+                        requested,
+                    )
+                latest = self._apply_local_pending(disk_latest)
                 current = latest.get(key, SidecarRecord())
-                record = SidecarRecord(
-                    favorite=current.favorite if favorite is None else bool(favorite),
-                    tags=current.tags if tags is None else normalize_tags(tags),
-                    description=current.description if description is None else str(description).strip(),
-                    collections=current.collections if collections is None else normalize_tags(collections),
-                    imported_at=current.imported_at if imported_at is None else max(0.0, float(imported_at)),
-                )
+                values = {
+                    field_name: getattr(current, field_name)
+                    for field_name in _SIDECAR_RECORD_FIELDS
+                }
+                values.update(requested)
+                record = SidecarRecord(**values)
                 latest[key] = record
                 _write_sidecar_records(target, self.VERSION, latest)
                 _cleanup_sidecar_temps(target)
@@ -496,13 +575,12 @@ class MediaSidecarStore:
             return record
 
         current = self.get(key)
-        record = SidecarRecord(
-            favorite=current.favorite if favorite is None else bool(favorite),
-            tags=current.tags if tags is None else normalize_tags(tags),
-            description=current.description if description is None else str(description).strip(),
-            collections=current.collections if collections is None else normalize_tags(collections),
-            imported_at=current.imported_at if imported_at is None else max(0.0, float(imported_at)),
-        )
+        values = {
+            field_name: getattr(current, field_name)
+            for field_name in _SIDECAR_RECORD_FIELDS
+        }
+        values.update(requested)
+        record = SidecarRecord(**values)
         self._records[key] = record
         self._dirty_records.add(key)
         return record

@@ -15,6 +15,7 @@ from full_album_maker.media_library_services import (
     SidecarCorruptionError,
     SidecarMigrationConflict,
     SidecarRecord,
+    SidecarWriteConflict,
     SidecarStoreError,
     asset_from_item,
     collect_folder_paths,
@@ -586,3 +587,119 @@ def test_failed_corrupt_sidecar_quarantine_blocks_persistence(
         raise AssertionError("Write harus diblok jika corruption tidak bisa diamankan")
 
     assert target.read_bytes() == corrupt
+
+
+
+def test_two_stale_instances_cannot_overwrite_same_metadata_field(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "SameFieldConflict.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update(
+        "asset-shared",
+        description="baseline",
+        tags=("keep",),
+    )
+
+    first = MediaSidecarStore(project)
+    second = MediaSidecarStore(project)
+    assert first.get("asset-shared").description == "baseline"
+    assert second.get("asset-shared").description == "baseline"
+
+    first.update("asset-shared", description="instance-a")
+
+    try:
+        second.update("asset-shared", description="instance-b")
+    except SidecarWriteConflict as exc:
+        assert "description" in str(exc)
+    else:
+        raise AssertionError("Stale same-field write harus diblokir")
+
+    latest = MediaSidecarStore(project).get("asset-shared")
+    assert latest.description == "instance-a"
+    assert latest.tags == ("keep",)
+
+
+def test_stale_instances_still_merge_different_fields_on_same_asset(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DifferentFields.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update(
+        "asset-shared",
+        favorite=False,
+        tags=("baseline",),
+        description="baseline",
+    )
+
+    first = MediaSidecarStore(project)
+    second = MediaSidecarStore(project)
+    first.load()
+    second.load()
+
+    first.update("asset-shared", favorite=True)
+    second.update(
+        "asset-shared",
+        tags=("instance-b",),
+        description="description-b",
+    )
+
+    latest = MediaSidecarStore(project).get("asset-shared")
+    assert latest.favorite is True
+    assert latest.tags == ("instance-b",)
+    assert latest.description == "description-b"
+
+
+def test_stale_same_field_write_is_allowed_when_intended_value_matches_disk(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "IdempotentSameField.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset-shared", description="baseline")
+
+    first = MediaSidecarStore(project)
+    second = MediaSidecarStore(project)
+    first.load()
+    second.load()
+
+    first.update("asset-shared", description="same-final-value")
+    second.update("asset-shared", description="same-final-value")
+
+    assert (
+        MediaSidecarStore(project).get("asset-shared").description
+        == "same-final-value"
+    )
+
+
+def test_refresh_after_same_field_conflict_allows_new_edit(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "RefreshAfterConflict.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset-shared", description="baseline")
+
+    first = MediaSidecarStore(project)
+    stale = MediaSidecarStore(project)
+    first.load()
+    stale.load()
+    first.update("asset-shared", description="instance-a")
+
+    try:
+        stale.update("asset-shared", description="stale-write")
+    except SidecarWriteConflict:
+        pass
+    else:
+        raise AssertionError("Conflict fixture tidak terpicu")
+
+    refreshed = MediaSidecarStore(project)
+    assert refreshed.get("asset-shared").description == "instance-a"
+    refreshed.update("asset-shared", description="after-refresh")
+
+    assert (
+        MediaSidecarStore(project).get("asset-shared").description
+        == "after-refresh"
+    )
