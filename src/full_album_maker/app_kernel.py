@@ -18,6 +18,7 @@ from .feature_parity_registry import (
 )
 from .task_lifecycle import ShutdownReport, TaskSupervisor
 from .project_persistence import DEFAULT_PROJECT_PERSISTENCE, ProjectPersistence
+from .render_engine import RenderEngine, bind_render_engine
 
 
 Runner = Callable[[], int]
@@ -61,6 +62,7 @@ class AppKernel:
     feature_parity: FeatureParityRegistry
     tasks: TaskSupervisor
     persistence: ProjectPersistence
+    render_engine: RenderEngine
     shutdown_timeout_seconds: float = 1.0
 
     def close(self) -> ShutdownReport:
@@ -71,7 +73,11 @@ class AppKernel:
         try:
             if "--portable-smoke" in args:
                 return self.runtime.run_portable_smoke()
-            return self.runtime.run_gui()
+            # M4 exposes the AppKernel-owned RenderEngine only while the legacy
+            # production window is constructed/run. RenderAsyncBridge captures
+            # this exact instance, avoiding a second render orchestration owner.
+            with bind_render_engine(self.render_engine):
+                return self.runtime.run_gui()
         finally:
             # The kernel owns its central task boundary. Existing legacy workers
             # are still closed by their current owners until migrated in later
@@ -96,6 +102,7 @@ class CompositionRoot:
         feature_parity: FeatureParityRegistry = DEFAULT_FEATURE_PARITY_REGISTRY,
         task_supervisor: TaskSupervisor | None = None,
         project_persistence: ProjectPersistence = DEFAULT_PROJECT_PERSISTENCE,
+        render_engine: RenderEngine | None = None,
         task_workers: int = 4,
         shutdown_timeout_seconds: float = 1.0,
     ) -> None:
@@ -110,6 +117,7 @@ class CompositionRoot:
         self._feature_parity = feature_parity
         self._task_supervisor = task_supervisor
         self._project_persistence = project_persistence
+        self._render_engine = render_engine
         self._task_workers = int(task_workers)
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
 
@@ -126,6 +134,7 @@ class CompositionRoot:
             feature_parity=self._feature_parity,
             tasks=tasks,
             persistence=self._project_persistence,
+            render_engine=self._render_engine or RenderEngine(),
             shutdown_timeout_seconds=self._shutdown_timeout_seconds,
         )
 
@@ -137,6 +146,7 @@ def build_app_kernel(
     feature_parity: FeatureParityRegistry = DEFAULT_FEATURE_PARITY_REGISTRY,
     task_supervisor: TaskSupervisor | None = None,
     project_persistence: ProjectPersistence = DEFAULT_PROJECT_PERSISTENCE,
+    render_engine: RenderEngine | None = None,
     task_workers: int = 4,
     shutdown_timeout_seconds: float = 1.0,
 ) -> AppKernel:
@@ -148,6 +158,7 @@ def build_app_kernel(
         feature_parity=feature_parity,
         task_supervisor=task_supervisor,
         project_persistence=project_persistence,
+        render_engine=render_engine,
         task_workers=task_workers,
         shutdown_timeout_seconds=shutdown_timeout_seconds,
     ).build()
@@ -158,6 +169,7 @@ __all__ = [
     "CompositionRoot",
     "LegacyRuntimeAdapter",
     "ProjectPersistence",
+    "RenderEngine",
     "Runner",
     "ShutdownReport",
     "TaskSupervisor",
