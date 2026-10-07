@@ -435,7 +435,7 @@ class RenderQueueStore:
             folder = final.parent
             if not folder.is_dir():
                 continue
-            pattern = f".{final.stem}.{job.attempt_id[:8]}.*.rendering.mp4"
+            pattern = f".{final.stem}.{job.attempt_id[:8]}*.rendering.mp4"
             for candidate in folder.glob(pattern):
                 resolved = candidate.resolve(strict=False)
                 if resolved in seen:
@@ -555,7 +555,7 @@ class RenderQueueStore:
 
             # A genuinely live active attempt anywhere in the shared queue owns
             # the global queue slot. Do not start another queued attempt.
-            if any(job.state in _LIVE_ACTIVE_STATES for job in jobs):
+            if any(job.state in _RECOVER_AS_INTERRUPTED for job in jobs):
                 if dirty:
                     jobs = self._write_records_unlocked(jobs, owners)
                 return jobs, None
