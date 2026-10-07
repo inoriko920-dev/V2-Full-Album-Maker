@@ -1,10 +1,10 @@
 # V2 Full-Album-Maker — Project Status
 
 ## Current Phase
-QUALITY — Q3 INFRASTRUCTURE
+QUALITY — Q4 WINDOWS ARTIFACT
 
 ## Current STEP
-Q3 — Infrastructure Quality Gate — PASS
+Q4 — Windows Artifact Quality Gate — PASS
 
 ## Gate Status
 - STEP 00: PASS
@@ -21,14 +21,14 @@ Q3 — Infrastructure Quality Gate — PASS
 - STEP 11: PASS
 
 ## STEP 11 Final Release / Handoff Direction
-- First mature V2 stable target is v2.0.0 after implementation and Q0–Q5 PASS; no version bump was performed during planning.
-- Stable publication must be explicit from a Q5-approved candidate SHA; main push must not auto-publish an unapproved stable release.
+- The exact Q4 Windows candidate is version v2.0.0, but stable publication remains blocked until Q5 PASS.
+- Stable publication must be explicit from the Q4-approved candidate SHA; main/build validation must not auto-publish an unapproved stable release.
 - Exact tested ZIP must be the published ZIP and is identified by semantic version + candidate commit + SHA-256.
 - Windows portable remains the primary distribution model: Python 3.12.10 release runtime, pinned dependencies, pinned FFmpeg digest, pinned font, PyInstaller onedir.
 - Extracted-ZIP smoke must run in Unicode/apostrophe path without global Python, global FFmpeg, or API keys and must verify audio+video output.
 - One canonical release manifest should prevent drift between workflow/build script/CAPABILITIES/notices.
-- Current THIRD_PARTY_NOTICES.md contains stale FFmpeg provenance and is a release blocker before V2 RC.
-- Current stable-release-on-main behavior and old hardcoded STEP11 ancestry in release QA must be redesigned before V2 stable.
+- Q4 resolved the stale THIRD_PARTY_NOTICES FFmpeg provenance and aligned it with the canonical release manifest/shipping pin.
+- Q4 removed stable-release-on-main behavior from the build workflow; the old STEP12 hardcoded ancestry remains a Q5 publication-workflow blocker and must not be used to rebuild or bless another artifact.
 - Application rollback and project-data rollback are separate contracts.
 - Initial updates use side-by-side portable folders; auto-updater/installer remain deferred.
 - Old Full-Album-Maker repository remains permanently read-only.
@@ -37,7 +37,7 @@ Q3 — Infrastructure Quality Gate — PASS
 STEP 00–11 planning is COMPLETE.
 
 ## Coding Status
-M0/T1 through M9 are implemented and validated. Q2 and Q3 Quality Gates are PASS.
+M0/T1 through M9 are implemented and validated. Q2, Q3, and Q4 Quality Gates are PASS.
 
 M3 result:
 - one `ProjectPersistence` facade now owns ProjectDocument save/load/recovery contracts;
@@ -157,14 +157,40 @@ Q3 result:
 
 Validated Q3 candidate `af98388eeb2c0eecb84bfe1cdbd44fdcad6d1385` on Actions run `37602494015`: real FFmpeg 10 passed; UI capture matrix 9/9 PASS; structural stress 2 passed; performance comparator PASS with no >10% regression; Python 3.11 full suite 557 passed / 93 skipped.
 
+Q4 result:
+- v2.0.0 candidate version is aligned across package metadata, release manifest, capabilities, and release notes;
+- `build/release_manifest.json` is the canonical source for Windows Python, pip/packages, FFmpeg asset/digest, Noto Sans commit, and artifact naming;
+- stale THIRD_PARTY_NOTICES FFmpeg provenance was corrected to the exact shipping pin;
+- build-windows-portable is validation-only with `contents: read` and no automatic GitHub Release publication;
+- full Windows regression during exact candidate build: 651 passed, 0 failed;
+- PyInstaller onedir portable build PASS;
+- exact extracted ZIP smoke PASS from Unicode/apostrophe path without global Python, global FFmpeg, Gemini API key, or Google API key;
+- smoke verified bundled real render + ffprobe audio/video output and GUI v2.0.0 identity;
+- exact pinned Windows FFmpeg `N-127142-g12b7b9891b-20261003` passed the Q3-carried `-/filter_complex` capability test;
+- secret scan, package-lock/manifest alignment, notice/provenance alignment, embedded release manifest/capabilities, and ZIP checksum gates PASS;
+- no stable GitHub Release was published.
+
+Exact Q4 artifact identity:
+- version: `2.0.0`
+- candidate SHA: `d2ce2ccac62cdcd8994a38251a5b547c8460421e`
+- Actions run: `37615631835`
+- Actions artifact ID: `11480755092`
+- artifact name: `q4-windows-artifact-candidate`
+- inner ZIP: `Full-Album-Maker-v2.0.0-Windows-Portable.zip`
+- inner ZIP bytes: `189554128`
+- inner ZIP SHA-256: `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`
+- shipping FFmpeg ZIP SHA-256: `a885f564dee2b60f69ab866c6c89b96ae531fc2ee1f24ff8b5b1a6d29960a96b`
+
+The Q4 workflow ignores documentation-only pushes after candidate freeze so governance/evidence commits cannot generate a replacement artifact. Q5 must publish the exact tested inner ZIP above without rebuilding it.
+
 ## Next Operational Step
-Q3 is PASS. On the next explicit turn:
-1. Start **Q4 — Windows Artifact Quality Gate** from STEP 10/11 only.
-2. Build the exact Windows x86_64 portable candidate from the approved Q3 head using the documented pinned runtime/dependencies/FFmpeg/font/PyInstaller path.
-3. Run the Windows-only `-/filter_complex` real-FFmpeg test against the exact shipping FFmpeg pin.
-4. Validate the extracted final ZIP in an isolated Unicode/apostrophe path with global Python/FFmpeg/API keys unavailable, plus checksum/supply-chain/provenance gates.
-5. Keep build validation separate from stable publication and report Q4 PASS/FAIL with exact artifact identity.
-6. Do not start Q5 stable release publication in the same turn.
+Q4 is PASS. On the next explicit turn:
+1. Start **Q5 — Release Quality Gate** only.
+2. Use candidate SHA `d2ce2ccac62cdcd8994a38251a5b547c8460421e` and retrieve Actions artifact `11480755092` from run `37615631835`; do not rebuild the portable ZIP.
+3. Verify the inner ZIP name and SHA-256 exactly: `Full-Album-Maker-v2.0.0-Windows-Portable.zip` / `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`.
+4. Replace/retire any old STEP12 hardcoded release ancestry in the Q5 publication path and ensure publication targets only the approved Q4 artifact.
+5. Re-verify release notes, checksum, provenance/manifest, rollback evidence, and stable tag target before publication.
+6. Publish only after Q5 PASS, and publish the exact Q4-tested ZIP + checksum without rebuilding.
 
 ## Canonical References
 - MASTER planning DOCX.

@@ -52,8 +52,8 @@ Wrap current proven behavior first. Route one path through the facade. Prove par
 - Release artifact identity = version + candidate commit + SHA-256.
 - Q4/Q5 smoke uses the extracted final ZIP with no global Python/FFmpeg/API key.
 - One release manifest should drive/verify repeated version/FFmpeg/font/dependency facts.
-- THIRD_PARTY_NOTICES must match exact shipping pins; current stale FFmpeg notice is a future RC blocker.
-- Main push must not automatically create an unapproved stable release.
+- THIRD_PARTY_NOTICES must match exact shipping pins; Q4 resolved the stale FFmpeg provenance and Q5 must preserve that exact manifest/notices alignment.
+- Main/build validation must not automatically create an unapproved stable release; Q4 removed that behavior from the build workflow.
 - Application binary rollback and project-data rollback are separate.
 - Initial updates use side-by-side portable folders; auto-updater/installer are deferred.
 - Old repo remains read-only permanently.
@@ -208,13 +208,31 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - Successful Actions run: `37602494015`.
 - Detailed records: `docs/implementation/Q3_INFRASTRUCTURE_QUALITY_GATE.md` and `docs/implementation/Q3_EVIDENCE.md`.
 
+## Q4 Windows Artifact Quality Gate — PASS
+- Branch: `quality-q4-windows-artifact`
+- Exact candidate SHA: `d2ce2ccac62cdcd8994a38251a5b547c8460421e`.
+- Exact Actions run: `37615631835`.
+- Exact Actions artifact ID/name: `11480755092` / `q4-windows-artifact-candidate`.
+- Exact inner ZIP: `Full-Album-Maker-v2.0.0-Windows-Portable.zip`.
+- Exact inner ZIP SHA-256: `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`.
+- Exact inner ZIP bytes: `189554128`.
+- Full Windows regression in artifact build: 651 passed, 0 failed.
+- Pinned shipping Windows FFmpeg: `N-127142-g12b7b9891b-20261003`; Q3-carried `-/filter_complex` test PASS.
+- Extracted ZIP smoke from Unicode/apostrophe path PASS with global Python/FFmpeg unavailable and API keys absent; bundled output verified audio+video.
+- Secret scan, package pins, manifest/notices provenance, checksum, embedded capabilities/release manifest, licenses/fonts/FFmpeg assets all PASS.
+- `build/release_manifest.json` is now the canonical release metadata source.
+- `build-windows-portable.yml` is validation-only and cannot auto-publish stable releases.
+- Q4 publication flag: false; no stable GitHub Release was created.
+- Q4 workflow ignores docs-only pushes after artifact freeze; later documentation commits are not release candidates and must not replace the tested artifact.
+- Detailed records: `docs/implementation/Q4_WINDOWS_ARTIFACT_QUALITY_GATE.md` and `docs/implementation/Q4_EVIDENCE.md`.
+
 ## Next Work
-- Q4 Windows Artifact Quality Gate only.
-- Build the exact documented Windows x86_64 portable candidate from the approved Q3 head.
-- Run the Windows-only external filter-script FFmpeg test against the exact shipping FFmpeg pin.
-- Validate extracted-ZIP isolation/smoke, checksums, pins, license/provenance, and other Q4 supply-chain gates.
-- Preserve Q2/Q3 evidence and do not change architecture/UI merely to make the artifact gate pass.
-- Do not publish a stable release; Q5 remains separate.
+- Q5 Release Quality Gate only.
+- Q5 input is frozen: candidate `d2ce2ccac62cdcd8994a38251a5b547c8460421e`, run `37615631835`, artifact ID `11480755092`.
+- Retrieve the existing Q4 artifact and verify inner ZIP SHA-256 `4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad`; do not rebuild it.
+- Replace/retire the old STEP12 hardcoded ancestry in the publication path and bind publication to the frozen Q4 identity.
+- Re-verify release notes, SHA256SUMS, release manifest/notices, rollback/provenance evidence, and stable tag target.
+- Only after Q5 PASS may the exact tested ZIP be published as stable v2.0.0.
 
 ## Current Handoff
 - Phase: IMPLEMENTATION
@@ -233,4 +251,7 @@ Implementation is active. M0/T1 through M9 are completed and gate-protected. The
 - STEP 03 M0–M9 architecture migration: COMPLETE
 - Q2 Integration Quality Gate: PASS
 - Q3 Infrastructure Quality Gate: PASS
-- Next operational action: Q4 Windows Artifact Quality Gate only; then report gate before Q5.
+- Q4 Windows Artifact Quality Gate: PASS
+- Frozen Q4 release-candidate SHA: d2ce2ccac62cdcd8994a38251a5b547c8460421e
+- Frozen Q4 portable ZIP SHA-256: 4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad
+- Next operational action: Q5 Release Quality Gate only; do not rebuild the Q4 ZIP.
