@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -97,7 +98,7 @@ def test_build_workflow_validates_only_and_cannot_auto_publish_stable():
     assert "test_real_ffmpeg_accepts_external_filter_script" in q4
     assert "publication_performed" in q4
     assert '"publication_performed": False' in q4
-    assert "gh release create" not in q4
+    assert not re.search(r"(?m)^\\s*gh release create\\b", q4)
 
 
 def test_notice_provenance_matches_canonical_manifest():

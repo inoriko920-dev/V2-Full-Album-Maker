@@ -454,7 +454,7 @@ FEATURE_PARITY_ENTRIES: tuple[FeatureParityEntry, ...] = (
         "FP-PORTABLE-01", "portable", "Windows portable ZIP remains the distribution target",
         FeatureStatus.MUST_KEEP, ("C-19",),
         (_ev("tests/test_release_candidate_audit.py",
-             "test_local_portable_build_keeps_s12_release_contract"),),
+             "test_local_portable_build_uses_canonical_release_manifest_contract"),),
         workflow_evidence=(
             ".github/workflows/build-windows-portable.yml",
             ".github/workflows/step12-release-validation.yml",
@@ -465,8 +465,8 @@ FEATURE_PARITY_ENTRIES: tuple[FeatureParityEntry, ...] = (
         FeatureStatus.MUST_KEEP, ("C-19",),
         (_ev("tests/test_stable_release_v1.py",
              "test_stable_version_is_consistent_across_package_metadata",
-             "test_capability_report_records_release_identity_and_immutable_ffmpeg_pin",
-             "test_release_workflow_is_gated_versioned_checksummed_and_immutable"),),
+             "test_capability_report_records_release_identity_and_manifest_pins",
+             "test_build_workflow_validates_only_and_cannot_auto_publish_stable"),),
         workflow_evidence=(".github/workflows/build-windows-portable.yml",),
     ),
     FeatureParityEntry(
