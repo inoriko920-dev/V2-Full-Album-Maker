@@ -360,7 +360,12 @@ def _window_init(self, *args, **kwargs) -> None:
         if button.text() in {"Split", "Ripple", "Snap", "Marker"}:
             controls.append(button)
     self._s03_generic_timeline_controls = controls
-    self.foundation_state.workspace_changed.connect(self._s03_completion_timeline_controls)
+    self.foundation_shell.workspace_registry.register_listener(
+        "media",
+        self._s03_completion_timeline_controls,
+        name="media-completion-route",
+        replay=False,
+    )
 
     self.foundation_shell.horizontal_splitter.setMinimumHeight(0)
     self.foundation_shell.inspector.setMinimumHeight(0)

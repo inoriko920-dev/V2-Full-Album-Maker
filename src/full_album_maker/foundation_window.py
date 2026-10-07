@@ -97,11 +97,6 @@ class FoundationMainWindow(V14EditorMainWindow):
         self.home_workspace.recent_remove_requested.connect(self._home_remove_recent)
         self.home_workspace.show_all_recent_requested.connect(self._home_show_all_recent)
         self.home_workspace.quick_route_requested.connect(self._home_quick_route)
-        index = self.foundation_shell.workspace_stack._index["home"]
-        old_home = self.foundation_shell.workspace_stack.widget(index)
-        self.foundation_shell.workspace_stack.removeWidget(old_home)
-        old_home.setParent(None)
-        self.foundation_shell.workspace_stack.insertWidget(index, self.home_workspace)
         self.home_inspector = HomeInspectorWidget(self._home_state)
         self.home_inspector.defaults_changed.connect(self._home_defaults_changed)
         self.home_inspector.browse_output_requested.connect(self._home_browse_output)
@@ -109,7 +104,15 @@ class FoundationMainWindow(V14EditorMainWindow):
         self._inspector_router.addWidget(self.home_inspector)
         self._inspector_router.addWidget(FAMEmptyState("Belum ada pilihan", "Pilih objek di workspace untuk melihat properti."))
         self.foundation_shell.inspector.content.set_properties_widget(self._inspector_router)
-        self.foundation_state.workspace_changed.connect(self._home_workspace_changed)
+        self.foundation_shell.workspace_registry.register_bundle(
+            "home",
+            workspace=self.home_workspace,
+            inspector=self.home_inspector,
+            timeline=self.foundation_shell.timeline.canvas,
+            listener=self._home_workspace_changed,
+            listener_name="home-route",
+            replay=False,
+        )
         self._home_workspace_changed(self.foundation_state.workspace)
 
     def _portable_status(self) -> PortableStatus:

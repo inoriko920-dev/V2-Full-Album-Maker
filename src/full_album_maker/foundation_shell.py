@@ -17,6 +17,7 @@ from .foundation_components import (
 from .foundation_icons import foundation_icon
 from .foundation_theme import FOUNDATION_STYLE
 from .foundation_tokens import TIMELINE_HEIGHT_BY_WORKSPACE, TOKENS, WORKSPACE_LABELS, WORKSPACE_ORDER
+from .workspace_registry import WorkspaceRegistry, current_workspace_registry
 
 
 class FoundationUiState(QObject):
@@ -264,6 +265,25 @@ class WorkspaceStack(QStackedWidget):
 
     def set_route(self, route: str) -> None:
         self.setCurrentIndex(self._index.get(route, 0))
+
+    def replace_route(self, route: str, widget: QWidget) -> QWidget | None:
+        """Replace one route at its stable index without exposing stack internals."""
+
+        if route not in self._index:
+            raise KeyError(f"Route workspace tidak dikenal: {route}")
+        index = self._index[route]
+        old = self.widget(index)
+        if old is widget:
+            return old
+        if old is not None:
+            self.removeWidget(old)
+        self.insertWidget(index, widget)
+        # Removing then inserting at the same stable slot restores all canonical
+        # indices; only the route's widget identity changes.
+        self._index[route] = index
+        if old is not None:
+            old.setParent(None)
+        return old
 
 
 class InspectorDockHost(QFrame):
@@ -515,6 +535,18 @@ class FoundationShellWidget(QWidget):
         self.navigation = WorkspaceNavigation(self.state)
         self.context = ContextPlaceholder()
         self.workspace_stack = WorkspaceStack()
+        registry = current_workspace_registry()
+        if registry is None:
+            registry = WorkspaceRegistry(
+                WORKSPACE_ORDER,
+                replace_workspace=self.workspace_stack.replace_route,
+            )
+        else:
+            expected_routes = tuple(route for route, _label, _icon in WORKSPACE_ORDER)
+            if registry.routes != expected_routes:
+                raise RuntimeError("WorkspaceRegistry AppKernel tidak cocok dengan route UI.")
+            registry.attach_workspace_replacer(self.workspace_stack.replace_route)
+        self.workspace_registry = registry
         self.inspector = InspectorDockHost()
         for widget in (self.navigation, self.context, self.workspace_stack, self.inspector):
             self.horizontal_splitter.addWidget(widget)
@@ -533,8 +565,14 @@ class FoundationShellWidget(QWidget):
         self.status_bar = AppStatusBar(self.state)
         root.addWidget(self.status_bar)
         self.navigation.route_requested.connect(self.state.set_workspace)
-        self.state.workspace_changed.connect(self._apply_workspace)
-        self._apply_workspace(self.state.workspace)
+        self.workspace_registry.register_listener(
+            None,
+            self._apply_workspace,
+            name="foundation-shell",
+            replay=False,
+        )
+        self.state.workspace_changed.connect(self.workspace_registry.activate)
+        self.workspace_registry.activate(self.state.workspace)
 
     def _apply_workspace(self, route: str) -> None:
         route = route if route in WORKSPACE_LABELS else "home"

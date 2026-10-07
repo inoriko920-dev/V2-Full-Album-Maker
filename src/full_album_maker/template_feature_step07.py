@@ -47,12 +47,6 @@ def _install_widgets(self) -> None:
     self._s07_custom_errors: tuple[str, ...] = ()
 
     self.template_workspace_s07 = TemplateGalleryWorkspace()
-    index = self.foundation_shell.workspace_stack._index["template"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.template_workspace_s07)
-
     context_layout = self.foundation_shell.context.layout()
     self.template_context_s07 = TemplateFilterContext()
     self.template_context_s07.hide()
@@ -65,6 +59,17 @@ def _install_widgets(self) -> None:
     timeline_layout = self.foundation_shell.timeline.canvas.parentWidget().layout()
     timeline_layout.addWidget(self.template_timeline_s07, 1)
     self.template_timeline_s07.hide()
+
+    self.foundation_shell.workspace_registry.register_bundle(
+        "template",
+        workspace=self.template_workspace_s07,
+        context=self.template_context_s07,
+        inspector=self.template_inspector_s07,
+        timeline=self.template_timeline_s07,
+        listener=self._s07_route,
+        listener_name="template-route",
+        replay=False,
+    )
 
 
 def _connect_widgets(self) -> None:
@@ -81,7 +86,6 @@ def _connect_widgets(self) -> None:
     self.template_inspector_s07.save_custom_requested.connect(self._s07_save_custom)
     self.template_inspector_s07.reset_requested.connect(self._s07_reset)
     self._s07_thumbnail_cache.thumbnail_ready.connect(self._s07_thumbnail_ready)
-    self.foundation_state.workspace_changed.connect(self._s07_route)
     self.editor_workspace.documentChanged.connect(self._s07_document_changed)
     self.destroyed.connect(lambda *_args: self._s07_thumbnail_cache.close())
 

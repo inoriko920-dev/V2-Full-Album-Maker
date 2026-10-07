@@ -70,12 +70,6 @@ def _install_widgets(self) -> None:
     self._s10_last_persisted_percent: dict[tuple[str, str], float] = {}
 
     self.render_workspace_s10 = RenderCenterWorkspace()
-    index = self.foundation_shell.workspace_stack._index["render"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.render_workspace_s10)
-
     # Render route intentionally has context width 0 in the shared shell, but we
     # keep the history surface attached so route/compact changes retain one owner.
     context_layout = self.foundation_shell.context.layout()
@@ -106,6 +100,17 @@ def _install_widgets(self) -> None:
     inspector_layout = self.render_inspector_s10.layout()
     inspector_layout.insertWidget(max(0, inspector_layout.count() - 1), actions)
 
+    self.foundation_shell.workspace_registry.register_bundle(
+        "render",
+        workspace=self.render_workspace_s10,
+        context=self.render_history_s10,
+        inspector=self.render_inspector_s10,
+        timeline=self.foundation_shell.timeline.canvas,
+        listener=self._s10_route,
+        listener_name="render-route",
+        replay=False,
+    )
+
 
 def _connect_widgets(self) -> None:
     inspector = self.render_inspector_s10
@@ -130,7 +135,6 @@ def _connect_widgets(self) -> None:
     bridge.render_failed.connect(self._s10_render_failed)
     bridge.busy_changed.connect(self._s10_busy_changed)
 
-    self.foundation_state.workspace_changed.connect(self._s10_route)
     self.editor_workspace.documentChanged.connect(self._s10_document_changed)
 
 

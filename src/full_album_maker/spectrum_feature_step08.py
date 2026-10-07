@@ -39,12 +39,6 @@ def _install_widgets(self) -> None:
     self._s08_preview_worker = SpectrumAccuratePreview(parent=self)
 
     self.spectrum_workspace_s08 = SpectrumWorkspace()
-    index = self.foundation_shell.workspace_stack._index["spectrum"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.spectrum_workspace_s08)
-
     self.spectrum_context_s08 = SpectrumLayerContext()
     self.spectrum_context_s08.hide()
     self.foundation_shell.context.layout().addWidget(self.spectrum_context_s08, 1)
@@ -56,6 +50,17 @@ def _install_widgets(self) -> None:
     timeline_layout = self.foundation_shell.timeline.canvas.parentWidget().layout()
     timeline_layout.addWidget(self.spectrum_timeline_s08, 1)
     self.spectrum_timeline_s08.hide()
+
+    self.foundation_shell.workspace_registry.register_bundle(
+        "spectrum",
+        workspace=self.spectrum_workspace_s08,
+        context=self.spectrum_context_s08,
+        inspector=self.spectrum_inspector_s08,
+        timeline=self.spectrum_timeline_s08,
+        listener=self._s08_route,
+        listener_name="spectrum-route",
+        replay=False,
+    )
 
 
 def _connect_widgets(self) -> None:
@@ -79,7 +84,6 @@ def _connect_widgets(self) -> None:
 
     self.spectrum_timeline_s08.playhead_requested.connect(self._s08_seek)
     self._s08_preview_worker.preview_ready.connect(self._s08_preview_ready)
-    self.foundation_state.workspace_changed.connect(self._s08_route)
     self.editor_workspace.documentChanged.connect(self._s08_document_changed)
     self.destroyed.connect(lambda *_args: self._s08_preview_worker.close())
 

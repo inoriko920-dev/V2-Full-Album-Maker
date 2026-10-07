@@ -33,12 +33,6 @@ def _install_widgets(self) -> None:
     self._s06_primary_song_id = ""
 
     self.visual_workspace_s06 = VisualPreviewWorkspace()
-    index = self.foundation_shell.workspace_stack._index["visual"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.visual_workspace_s06)
-
     context_layout = self.foundation_shell.context.layout()
     self._s06_context_old = [
         context_layout.itemAt(i).widget()
@@ -57,6 +51,17 @@ def _install_widgets(self) -> None:
     timeline_layout.addWidget(self.visual_timeline_s06, 1)
     self.visual_timeline_s06.hide()
 
+    self.foundation_shell.workspace_registry.register_bundle(
+        "visual",
+        workspace=self.visual_workspace_s06,
+        context=self.visual_context_s06,
+        inspector=self.visual_inspector_s06,
+        timeline=self.visual_timeline_s06,
+        listener=self._s06_route,
+        listener_name="visual-route",
+        replay=False,
+    )
+
 
 def _connect_widgets(self) -> None:
     self.visual_context_s06.selection_changed.connect(self._s06_selection_changed)
@@ -71,7 +76,6 @@ def _connect_widgets(self) -> None:
     self.visual_workspace_s06.previous_requested.connect(lambda: self._s06_step_song(-1))
     self.visual_workspace_s06.next_requested.connect(lambda: self._s06_step_song(1))
     self.visual_workspace_s06.play_requested.connect(self.editor_workspace.toggle_playback)
-    self.foundation_state.workspace_changed.connect(self._s06_route)
     self.editor_workspace.documentChanged.connect(self._s06_document_changed)
     self.editor_workspace.play_timer.timeout.connect(self._s06_playback_sync)
 

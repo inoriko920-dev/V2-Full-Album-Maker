@@ -84,12 +84,6 @@ def _restore_document(self) -> None:
 
 def _replace_workspace(self) -> None:
     self.album_workspace = AlbumWorkspace()
-    index = self.foundation_shell.workspace_stack._index["album"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.album_workspace)
-
     context_layout = self.foundation_shell.context.layout()
     self._s04_context_old = [
         context_layout.itemAt(i).widget()
@@ -107,6 +101,17 @@ def _replace_workspace(self) -> None:
     timeline_layout = self.foundation_shell.timeline.canvas.parentWidget().layout()
     timeline_layout.addWidget(self.album_timeline_canvas, 1)
     self.album_timeline_canvas.hide()
+
+    self.foundation_shell.workspace_registry.register_bundle(
+        "album",
+        workspace=self.album_workspace,
+        context=self.album_context,
+        inspector=self.album_tools,
+        timeline=self.album_timeline_canvas,
+        listener=self._s04_route,
+        listener_name="album-route",
+        replay=False,
+    )
 
 
 def _connect_album(self) -> None:
@@ -131,7 +136,6 @@ def _connect_album(self) -> None:
     self.album_tools.default_transition_requested.connect(self._s04_transition)
     self.album_tools.delete_requested.connect(self._s04_delete)
 
-    self.foundation_state.workspace_changed.connect(self._s04_route)
     self.editor_workspace.documentChanged.connect(self._s04_document_changed)
 
 

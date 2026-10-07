@@ -22,6 +22,8 @@ from .cache_manager import CacheManager, bind_cache_manager
 from .media_probe_service import MediaProbeService, bind_media_probe_service
 from .preview_engine import PreviewEngine, bind_preview_engine
 from .beat_analysis import BeatAnalysisService, bind_beat_analysis_service
+from .foundation_tokens import WORKSPACE_ORDER
+from .workspace_registry import WorkspaceRegistry, bind_workspace_registry
 from .render_engine import RenderEngine, bind_render_engine
 
 
@@ -59,9 +61,9 @@ class AppKernel:
     """Application kernel with one central task-lifecycle owner.
 
     M2 wires TaskSupervisor ownership, M3 ProjectPersistence, M4 RenderEngine,
-    M5 the probe/preview/cache service facades, and M6 BeatAnalysisService.
-    Legacy implementations remain adapters until their individual parity gates
-    permit retirement.
+    M5 the probe/preview/cache service facades, M6 BeatAnalysisService, and M7
+    WorkspaceRegistry. Legacy implementations remain adapters until their
+    individual parity gates permit retirement.
     """
 
     runtime: LegacyRuntimeAdapter
@@ -72,6 +74,7 @@ class AppKernel:
     cache_manager: CacheManager
     preview_engine: PreviewEngine
     beat_analysis_service: BeatAnalysisService
+    workspace_registry: WorkspaceRegistry
     render_engine: RenderEngine
     shutdown_timeout_seconds: float = 1.0
 
@@ -92,6 +95,7 @@ class AppKernel:
                 bind_cache_manager(self.cache_manager),
                 bind_preview_engine(self.preview_engine),
                 bind_beat_analysis_service(self.beat_analysis_service),
+                bind_workspace_registry(self.workspace_registry),
             ):
                 return self.runtime.run_gui()
         finally:
@@ -106,8 +110,8 @@ class CompositionRoot:
 
     M1 bound the proven runtime entrypoints. M2 added TaskSupervisor, M3 added
     ProjectPersistence, M4 added RenderEngine, M5 added MediaProbeService,
-    CacheManager, and PreviewEngine, and M6 adds BeatAnalysisService while
-    preserving the proven Spectrum/render paths. WorkspaceRegistry and later
+    CacheManager, and PreviewEngine, M6 added BeatAnalysisService, and M7 adds
+    WorkspaceRegistry while preserving the proven route adapters. Later
     migration boundaries remain deferred.
     """
 
@@ -123,6 +127,7 @@ class CompositionRoot:
         cache_manager: CacheManager | None = None,
         preview_engine: PreviewEngine | None = None,
         beat_analysis_service: BeatAnalysisService | None = None,
+        workspace_registry: WorkspaceRegistry | None = None,
         render_engine: RenderEngine | None = None,
         task_workers: int = 4,
         shutdown_timeout_seconds: float = 1.0,
@@ -142,6 +147,7 @@ class CompositionRoot:
         self._cache_manager = cache_manager
         self._preview_engine = preview_engine
         self._beat_analysis_service = beat_analysis_service
+        self._workspace_registry = workspace_registry
         self._render_engine = render_engine
         self._task_workers = int(task_workers)
         self._shutdown_timeout_seconds = float(shutdown_timeout_seconds)
@@ -171,6 +177,10 @@ class CompositionRoot:
             raise ValueError("BeatAnalysisService harus memakai CacheManager milik AppKernel.")
         if beat_analysis_service.task_supervisor is not tasks:
             raise ValueError("BeatAnalysisService harus memakai TaskSupervisor milik AppKernel.")
+        workspace_registry = self._workspace_registry or WorkspaceRegistry(WORKSPACE_ORDER)
+        expected_routes = tuple(route for route, _label, _icon in WORKSPACE_ORDER)
+        if workspace_registry.routes != expected_routes:
+            raise ValueError("WorkspaceRegistry harus mempertahankan 9 route canonical.")
         return AppKernel(
             runtime=runtime,
             feature_parity=self._feature_parity,
@@ -180,6 +190,7 @@ class CompositionRoot:
             cache_manager=cache_manager,
             preview_engine=preview_engine,
             beat_analysis_service=beat_analysis_service,
+            workspace_registry=workspace_registry,
             render_engine=self._render_engine or RenderEngine(),
             shutdown_timeout_seconds=self._shutdown_timeout_seconds,
         )
@@ -196,6 +207,7 @@ def build_app_kernel(
     cache_manager: CacheManager | None = None,
     preview_engine: PreviewEngine | None = None,
     beat_analysis_service: BeatAnalysisService | None = None,
+    workspace_registry: WorkspaceRegistry | None = None,
     render_engine: RenderEngine | None = None,
     task_workers: int = 4,
     shutdown_timeout_seconds: float = 1.0,
@@ -212,6 +224,7 @@ def build_app_kernel(
         cache_manager=cache_manager,
         preview_engine=preview_engine,
         beat_analysis_service=beat_analysis_service,
+        workspace_registry=workspace_registry,
         render_engine=render_engine,
         task_workers=task_workers,
         shutdown_timeout_seconds=shutdown_timeout_seconds,
@@ -231,5 +244,6 @@ __all__ = [
     "Runner",
     "ShutdownReport",
     "TaskSupervisor",
+    "WorkspaceRegistry",
     "build_app_kernel",
 ]

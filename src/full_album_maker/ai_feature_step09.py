@@ -62,12 +62,6 @@ def _install_widgets(self) -> None:
     self._s09_context_snapshot = None
 
     self.ai_workspace_s09 = AITaskCanvas()
-    index = self.foundation_shell.workspace_stack._index["ai_agent"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.ai_workspace_s09)
-
     context_layout = self.foundation_shell.context.layout()
     self.ai_conversations_s09 = AIConversationPanel()
     self.ai_conversations_s09.hide()
@@ -80,6 +74,17 @@ def _install_widgets(self) -> None:
     timeline_layout = self.foundation_shell.timeline.canvas.parentWidget().layout()
     timeline_layout.addWidget(self.ai_timeline_s09, 1)
     self.ai_timeline_s09.hide()
+
+    self.foundation_shell.workspace_registry.register_bundle(
+        "ai_agent",
+        workspace=self.ai_workspace_s09,
+        context=self.ai_conversations_s09,
+        inspector=self.ai_context_s09,
+        timeline=self.ai_timeline_s09,
+        listener=self._s09_route,
+        listener_name="ai-agent-route",
+        replay=False,
+    )
 
     self.ai_context_s09.set_provider(self._s09_provider_id, key_ready=_key_ready(self))
 
@@ -99,7 +104,6 @@ def _connect_widgets(self) -> None:
     self.ai_context_s09.provider_changed.connect(self._s09_provider_changed)
     self.ai_context_s09.permissions_changed.connect(self._s09_permissions_changed)
 
-    self.foundation_state.workspace_changed.connect(self._s09_route)
     self.editor_workspace.documentChanged.connect(self._s09_document_changed)
     self.editor_workspace.play_timer.timeout.connect(self._s09_playback_sync)
 

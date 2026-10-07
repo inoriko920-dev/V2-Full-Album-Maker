@@ -39,12 +39,6 @@ def _install_widgets(self) -> None:
     self._s05_ripple = False
 
     self.timeline_workspace_s05 = TimelinePreviewWorkspace()
-    index = self.foundation_shell.workspace_stack._index["timeline"]
-    old = self.foundation_shell.workspace_stack.widget(index)
-    self.foundation_shell.workspace_stack.removeWidget(old)
-    old.setParent(None)
-    self.foundation_shell.workspace_stack.insertWidget(index, self.timeline_workspace_s05)
-
     context_layout = self.foundation_shell.context.layout()
     self._s05_context_old = [
         context_layout.itemAt(i).widget()
@@ -62,6 +56,17 @@ def _install_widgets(self) -> None:
     body_layout = self.foundation_shell.timeline.canvas.parentWidget().layout()
     body_layout.addWidget(self.timeline_precision_s05, 1)
     self.timeline_precision_s05.hide()
+
+    self.foundation_shell.workspace_registry.register_bundle(
+        "timeline",
+        workspace=self.timeline_workspace_s05,
+        context=self.timeline_context_s05,
+        inspector=self.timeline_inspector_s05,
+        timeline=self.timeline_precision_s05,
+        listener=self._s05_route,
+        listener_name="timeline-route",
+        replay=False,
+    )
 
 
 def _connect_widgets(self) -> None:
@@ -92,7 +97,6 @@ def _connect_widgets(self) -> None:
     self.timeline_workspace_s05.play_requested.connect(self.editor_workspace.toggle_playback)
     self.timeline_workspace_s05.fullscreen_requested.connect(self._s05_fullscreen)
 
-    self.foundation_state.workspace_changed.connect(self._s05_route)
     self.editor_workspace.documentChanged.connect(self._s05_document_changed)
     self.editor_workspace.play_timer.timeout.connect(self._s05_playback_sync)
 
