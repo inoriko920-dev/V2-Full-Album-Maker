@@ -66,6 +66,9 @@ class TaskToken:
     def cancel_reason(self) -> str:
         return self._state.reason
 
+    def wait_cancelled(self, timeout: float | None = None) -> bool:
+        return self._state._event.wait(timeout)
+
     def raise_if_cancelled(self) -> None:
         if self.cancelled:
             raise TaskCancelledError(self.cancel_reason or "Task dibatalkan.")
