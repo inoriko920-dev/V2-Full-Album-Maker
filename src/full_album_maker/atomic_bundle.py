@@ -421,17 +421,20 @@ def _bundle_render(
                 "Lokasi output/sidecar tidak boleh menimpa file sumber proyek."
             )
 
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    recover_interrupted_bundles(dest_path.parent)
-    stages = [
-        _stage_path(dest_path, "video-rendering"),
-        _stage_path(sidecars[0], "chapters-rendering"),
-        _stage_path(sidecars[1], "tracklist-rendering"),
-        _stage_path(sidecars[2], "timeline-rendering"),
-    ]
-
-    root = temp_dir()
+    lease = acquire_output_target_lease(dest_path)
+    lease.__enter__()
+    stages: list[Path] = []
     try:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        recover_interrupted_bundles(dest_path.parent)
+        stages = [
+            _stage_path(dest_path, "video-rendering"),
+            _stage_path(sidecars[0], "chapters-rendering"),
+            _stage_path(sidecars[1], "tracklist-rendering"),
+            _stage_path(sidecars[2], "timeline-rendering"),
+        ]
+
+        root = temp_dir()
         with tempfile.TemporaryDirectory(prefix="fam_render_", dir=root) as work_dir:
             work = Path(work_dir)
             album_audio = work / "timeline_audio.m4a"
@@ -447,16 +450,17 @@ def _bundle_render(
         _check_cancel(self)
 
         publish_bundle_transactional(zip(stages, targets))
+
+        if log:
+            log(
+                "Render selesai dan MP4 + chapter + tracklist + timeline "
+                "dipublikasikan sebagai satu bundle transaksional."
+            )
+        return str(dest_path)
     finally:
         for stage in stages:
             _cleanup_path(stage)
-
-    if log:
-        log(
-            "Render selesai dan MP4 + chapter + tracklist + timeline "
-            "dipublikasikan sebagai satu bundle transaksional."
-        )
-    return str(dest_path)
+        lease.__exit__(None, None, None)
 
 
 def install_atomic_bundle() -> None:
