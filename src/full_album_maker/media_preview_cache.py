@@ -8,6 +8,7 @@ import queue
 import subprocess
 import tempfile
 import threading
+from time import monotonic
 from typing import Callable
 
 from PySide6.QtCore import QObject, QSize, Qt, Signal
@@ -271,13 +272,18 @@ class MediaPreviewCache(QObject):
         self._pending: set[tuple[int, str]] = set()
         self._generation = 0
         self._jobs = 0
+        self._closed = False
+        self._threads: list[threading.Thread] = []
         for index in range(max(1, min(4, int(workers)))):
             thread = threading.Thread(
                 target=self._worker,
                 daemon=True,
                 name=f"fam-media-preview-{index + 1}",
             )
+            self._threads.append(thread)
             thread.start()
+        if parent is not None and hasattr(parent, "destroyed"):
+            parent.destroyed.connect(self._owner_destroyed)
 
     @property
     def generation(self) -> int:
@@ -289,22 +295,83 @@ class MediaPreviewCache(QObject):
         with self._lock:
             return self._jobs
 
+    @property
+    def closed(self) -> bool:
+        with self._lock:
+            return self._closed
+
+    def _owner_destroyed(self, *_args) -> None:
+        self.close(timeout=0.0)
+
+    def close(self, timeout: float = 1.0) -> bool:
+        """Stop preview workers without waiting forever.
+
+        Queued work is discarded. A job already executing may finish in the
+        background, but once close begins it cannot emit jobs/preview signals
+        and no new request is accepted.
+        """
+
+        first_close = False
+        with self._lock:
+            if not self._closed:
+                first_close = True
+                self._closed = True
+                self._generation += 1
+                self._pending.clear()
+
+                drained = 0
+                while True:
+                    try:
+                        queued = self._queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    if queued is not None:
+                        drained += 1
+                if drained:
+                    self._jobs = max(0, self._jobs - drained)
+
+            threads = tuple(self._threads)
+
+        if first_close:
+            for _thread in threads:
+                self._queue.put(None)
+
+        deadline = monotonic() + max(0.0, float(timeout))
+        for thread in threads:
+            if not thread.is_alive():
+                continue
+            remaining = max(0.0, deadline - monotonic())
+            thread.join(remaining)
+
+        return all(not thread.is_alive() for thread in threads)
+
     def reset(self) -> None:
         """Invalidate callbacks from older project state without blocking the UI."""
         with self._lock:
+            if self._closed:
+                return
             self._generation += 1
             self._pending.clear()
 
     def request(self, asset: MediaAsset) -> bool:
+        with self._lock:
+            if self._closed:
+                return False
         if asset.status == MediaStatus.MISSING:
             return False
         target = preview_cache_path(asset, cache_manager=self.cache_manager)
         if _usable_cached_preview(target, asset, self.cache_manager):
+            with self._lock:
+                if self._closed:
+                    return False
+                generation = self._generation
             self.preview_ready.emit(
-                PreviewResult(asset_id=asset.asset_id, path=str(target), generation=self.generation)
+                PreviewResult(asset_id=asset.asset_id, path=str(target), generation=generation)
             )
             return True
         with self._lock:
+            if self._closed:
+                return False
             generation = self._generation
             key = (generation, asset.asset_id)
             if key in self._pending:
@@ -333,6 +400,9 @@ class MediaPreviewCache(QObject):
                 self._jobs = max(0, self._jobs - 1)
                 jobs = self._jobs
                 current = self._generation
+                closed = self._closed
+            if closed:
+                continue
             self.jobs_changed.emit(jobs)
             if generation == current:
                 self.preview_ready.emit(

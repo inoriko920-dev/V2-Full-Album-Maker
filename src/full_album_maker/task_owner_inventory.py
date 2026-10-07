@@ -38,10 +38,10 @@ LEGACY_TASK_OWNERS: tuple[LegacyTaskOwner, ...] = (
     LegacyTaskOwner(
         "media-preview-cache",
         "src/full_album_maker/media_preview_cache.py",
-        "bounded daemon thread queue",
-        "generation token suppresses stale preview result",
-        "no explicit close method in baseline owner",
-        "migrate with M5 preview/cache boundary",
+        "bounded daemon thread queue with tracked worker ownership",
+        "generation token plus closed-state guard suppress stale/post-close results",
+        "bounded close(timeout) drains queued work, signals worker sentinels, and parent destruction auto-closes",
+        "M5 preview/cache boundary now has explicit lifecycle shutdown; further migration is optional",
     ),
     LegacyTaskOwner(
         "spectrum-preview",

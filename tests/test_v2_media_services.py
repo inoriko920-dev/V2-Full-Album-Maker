@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import threading
+import time
 import wave
 
 import pytest
@@ -20,7 +22,7 @@ from full_album_maker.cache_manager import (
 )
 from full_album_maker.editor_models import ProjectDocument
 from full_album_maker.media_library_model import MediaAsset, MediaMetadata, MediaType
-from full_album_maker.media_preview_cache import generate_preview
+from full_album_maker.media_preview_cache import MediaPreviewCache, generate_preview
 from full_album_maker.media_probe_service import (
     MediaProbeResult,
     MediaProbeService,
@@ -235,3 +237,75 @@ def test_real_ffmpeg_media_probe_service_audio_duration(tmp_path: Path) -> None:
     assert result.duration_seconds == pytest.approx(0.25, abs=0.03)
     assert result.fingerprint is not None
     assert result.fingerprint.tier == "F2"
+
+
+def test_media_preview_cache_close_stops_workers_and_rejects_new_requests(tmp_path: Path) -> None:
+    manager = _media_cache_manager(tmp_path / "cache", version=9)
+    cache = MediaPreviewCache(workers=2, cache_manager=manager)
+
+    assert cache.closed is False
+    assert cache.close(timeout=1.0) is True
+    assert cache.closed is True
+    assert all(not worker.is_alive() for worker in cache._threads)
+
+    source = tmp_path / "after-close.png"
+    source.write_bytes(b"not-a-real-image")
+    asset = MediaAsset(
+        asset_id="asset-after-close",
+        path=str(source),
+        display_name=source.name,
+        media_type=MediaType.PHOTO,
+    )
+    assert cache.request(asset) is False
+    assert cache.job_count == 0
+
+
+# v2.0.1 regression guard: no preview completion is allowed after cache close.
+def test_media_preview_cache_close_suppresses_inflight_completion(tmp_path: Path, monkeypatch) -> None:
+    manager = _media_cache_manager(tmp_path / "cache-running", version=10)
+    cache = MediaPreviewCache(workers=1, cache_manager=manager)
+
+    source = tmp_path / "running-photo.png"
+    source.write_bytes(b"fixture")
+    asset = MediaAsset(
+        asset_id="asset-running",
+        path=str(source),
+        display_name=source.name,
+        media_type=MediaType.PHOTO,
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+    delivered: list[object] = []
+    job_updates: list[int] = []
+
+    def slow_generate(_asset, *, cache_manager=None):
+        entered.set()
+        assert release.wait(timeout=5)
+        target = tmp_path / "generated.png"
+        target.write_bytes(b"png")
+        return str(target)
+
+    monkeypatch.setattr("full_album_maker.media_preview_cache.generate_preview", slow_generate)
+    cache.preview_ready.connect(delivered.append)
+    cache.jobs_changed.connect(job_updates.append)
+
+    assert cache.request(asset) is True
+    assert entered.wait(timeout=2)
+    assert cache.job_count == 1
+
+    assert cache.close(timeout=0.01) is False
+    assert cache.closed is True
+    updates_at_close = list(job_updates)
+
+    release.set()
+    assert cache.close(timeout=1.0) is True
+
+    deadline = time.time() + 0.5
+    while time.time() < deadline:
+        time.sleep(0.01)
+
+    assert delivered == []
+    assert job_updates == updates_at_close
+    assert cache.job_count == 0
+    assert all(not worker.is_alive() for worker in cache._threads)
