@@ -336,3 +336,19 @@ This section supersedes the earlier v2.0.2 "Q5 NOT STARTED" notices. Historical 
 - Authoritative Q4 evidence: `docs/implementation/Q4_V2_0_2_EVIDENCE.md`; Q5 evidence: `docs/implementation/Q5_V2_0_2_EVIDENCE.md`.
 - v2.0.1 and v2.0.0 remain immutable historical stable rollback choices; original `inoriko920-dev/Full-Album-Maker` remains untouched.
 - **Current phase:** post-release maintenance. Future changed binaries require a new patch/minor version and their own Windows Q4/Q5 gates.
+
+
+## October 8, 2026 — v2.0.3 Q4 frozen, Q5 pending
+
+This supersedes older statements that v2.0.3 Q4 is not started. The **published latest stable is still v2.0.2** until Q5 genuinely completes.
+
+- PR #45: preview cache JSON non-object safety fix merged; `main` run `37735096131` PASS.
+- PR #46: v2.0.3 version preparation merged; `main` run `37736088109` PASS.
+- PR #47: separate v2.0.3 Q4 workflow merged; Windows run `37736530557` PASS (775 regression tests + 1 external FFmpeg filter test), PR run `37736567702` PASS.
+- **Frozen Q4 candidate SHA:** `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d` (not later squash merge `14545877cade0e0f7629411cc8a67f862b8211be`).
+- **Q4 Actions artifact ID:** `11531549824`, name `q4-v2.0.3-windows-artifact-candidate`.
+- **Inner Windows ZIP:** `Full-Album-Maker-v2.0.3-Windows-Portable.zip`, exactly `189599847` bytes, SHA-256 `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0`.
+- Source-of-truth Q4 evidence: `docs/implementation/Q4_V2_0_3_EVIDENCE.md`; gate plan: `docs/release/V2_0_3_GATE_PLAN.md`.
+- Protected-main CI after Q4 merge `37737069774` must PASS before initiating the Q5 publisher.
+- **Q4 PASS/FROZEN. Q5 NOT STARTED. v2.0.3 NOT PUBLISHED.**
+- Next action: exact-Q4-artifact v2.0.3 Q5 verification **without rebuilding**, followed by download of published ZIP, checksum and tag verification. Preserve v2.0.2/v2.0.1/v2.0.0 unchanged.
