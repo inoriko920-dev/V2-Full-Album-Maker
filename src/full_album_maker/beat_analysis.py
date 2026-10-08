@@ -350,8 +350,8 @@ class BeatAnalysisService:
             if any(
                 isinstance(value, bool)
                 or not isinstance(value, (int, float))
-                or not math.isfinite(value)
                 or not 0.0 <= value <= 1.0
+                or not math.isfinite(value)
                 for value in raw_envelope
             ):
                 raise ValueError("nilai envelope cache tidak valid")
