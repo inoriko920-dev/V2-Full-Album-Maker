@@ -435,8 +435,11 @@ class MediaPreviewCache(QObject):
             self._pending.add(key)
             self._jobs += 1
             jobs = self._jobs
+            # Make job publication atomic with pending/job bookkeeping.
+            # A close()/reset() invoked by jobs_changed must see this queued
+            # work; otherwise a late put() can strand it after worker shutdown.
+            self._queue.put((generation, asset, source_fingerprint))
         self.jobs_changed.emit(jobs)
-        self._queue.put((generation, asset, source_fingerprint))
         return True
 
     def _worker(self) -> None:
