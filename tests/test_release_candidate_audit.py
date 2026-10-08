@@ -72,7 +72,8 @@ def test_local_portable_build_uses_canonical_release_manifest_contract():
     manifest = json.loads((ROOT / "build" / "release_manifest.json").read_text(encoding="utf-8"))
 
     assert manifest["schema_version"] == 1
-    assert manifest["target_stable_version"] == "2.0.0"
+    from full_album_maker import __version__
+    assert manifest["target_stable_version"] == __version__
     assert manifest["python"]["version"] == "3.12.10"
     assert manifest["python"]["pip"] == "26.2.1"
 
