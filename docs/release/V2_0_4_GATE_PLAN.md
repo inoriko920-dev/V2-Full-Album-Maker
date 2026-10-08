@@ -1,6 +1,6 @@
 # V2-Full-Album-Maker — v2.0.4 patch quality-gate plan
 
-Status: **P01 CANDIDATE — NOT MERGED; Q4 NOT STARTED; Q5 NOT STARTED; NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS/FROZEN; Q5 NOT STARTED; v2.0.4 NOT PUBLISHED**
 
 ## Repository and source fence
 
@@ -64,11 +64,26 @@ No UI redesign, project/schema migration, new dependency, FFmpeg/font pin change
 | Gate | State | Evidence |
 | --- | --- | --- |
 | Source PR #52 exact head | PASS | 37743420847: 780 tests + Windows portable smoke |
-| PR #52 protected-main | **CHECK BEFORE P01 MERGE** | 37743973995, SHA `224be664195065a83120bc7b6a917b76e850961a` |
-| v2.0.4 P01 branch | In progress | Await exact final PR HEAD Windows CI |
-| v2.0.4 Q4 artifact | NOT STARTED | No valid Q4 SHA/ZIP ID/size/hash |
+| PR #52 protected-main | **PASS** | 37743973995, SHA `224be664195065a83120bc7b6a917b76e850961a` |
+| v2.0.4 P01 branch | **PASS/MERGED** | PR #53, 782 tests run 37744463640, post-merge main 37745055766 PASS |
+| v2.0.4 Q4 artifact | **PASS/FROZEN** | SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, run 37745568166, artifact 11536240883, 189599237 bytes, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b` |
 | v2.0.4 Q5 published | NOT STARTED | No tag/release is authorized yet |
 
 ## Handoff
 
 Read `docs/governance/AI_HANDOFF.md`, `docs/governance/PROJECT_STATUS.md`, `docs/governance/POST_RELEASE_MAINTENANCE.md` and the immutable Q4/Q5 v2.0.3 evidence. Do not invent artifact identities, merge without exact-head CI or publish from routine `main` validation.
+
+
+## Verified Q4 freeze — October 8, 2026
+
+This supersedes the earlier Q4-NOT-STARTED planning language while retaining the original gate decisions and audit trail.
+
+- P01 PR #53 exact-head Windows run `37744463640`: **782 tests and portable smoke PASS**. Squash merged to protected main `b7824e68c7fc26de07555ebee2866080c948ab1b`; post-merge run `37745055766`: **PASS**.
+- Q4 PR #54 exact candidate and workflow commit: `af5af1ce24aba17ff68d469390a0c3d21f80f44d`. Isolated Q4 run `37745568166`: **782 tests, additional pinned FFmpeg test, metadata, secrets, artifact identity, extracted offline audio/video smoke PASS**.
+- Exact **inner portable ZIP**: `Full-Album-Maker-v2.0.4-Windows-Portable.zip`; **189599237 bytes**; SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`.
+- GitHub Actions wrapper artifact **ID `11536240883`**, name `q4-v2.0.4-windows-artifact-candidate`. Wrapper digest is **not** the inner ZIP digest.
+- Generic PR #54 Windows run `37745591187`: **782 tests and portable smoke PASS**.
+- PR #54 merged to `main` at `1ebbb49d0ecfc2da1b450d5f7142af879728a9d9`. This merge SHA is **not** the frozen Q4 build SHA.
+- Verify Q4 post-merge protected-main run **`37746119351`** PASS before starting Q5. It was pending when Q4 evidence was first authored.
+- Exact source-of-truth: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`.
+- Q5 is **NOT STARTED**; do not publish/rebuild/retag v2.0.4, or modify v2.0.3 and earlier stable assets.
