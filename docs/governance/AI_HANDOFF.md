@@ -302,3 +302,20 @@ This supersedes the earlier v2.0.1 "Q5 NOT STARTED" handoff entries **for v2.0.1
 - Detailed authoritative publication proof: `docs/implementation/Q5_V2_0_1_EVIDENCE.md`.
 - Previous stable v2.0.0 was preserved, available for side-by-side rollback; old source `inoriko920-dev/Full-Album-Maker` remains unmodified.
 - **Next work:** only a new user-directed post-release maintenance or feature wave, with its own branch, CI and new semantic version if a changed binary is published.
+
+
+## October 8, 2026 — v2.0.2 patch candidate Q4 frozen (Q5 pending)
+
+This supersedes older "v2.0.2 Q4 not started" statements. `v2.0.1` remains the last **published stable**; its historical Q4/Q5 evidence is immutable.
+
+- PR #37: retry transient sidecar read/lock failures without quarantining healthy metadata, merged.
+- PR #39: skip NTFS directory junctions during recursive media scan, merged.
+- PR #40: v2.0.2 candidate identity merged; `main` Windows run `37731780154` PASS.
+- PR #41: v2.0.2 Q4 workflow merged; exact Windows Q4 run `37732261424` PASS (769 pytest + 1 FFmpeg filter test).
+- **Frozen exact Q4 candidate SHA:** `2678b9f93364334c7eaf9ebad9ef7e079533716f` (never substitute squash commit).
+- **Q4 Actions artifact ID:** `11530243260`, name `q4-v2.0.2-windows-artifact-candidate`.
+- **Frozen inner ZIP:** `Full-Album-Maker-v2.0.2-Windows-Portable.zip`, 189599767 bytes, SHA-256 `701e0b68de17ec30ad17620d5cb5ef47e29bb28ca36ad0c95e5c242757c70c64`.
+- Authoritative Q4 proof: `docs/implementation/Q4_V2_0_2_EVIDENCE.md`.
+- CI after PR #41 merge: `37732736075`, must be checked before Q5 execution.
+- **Q4: PASS/FROZEN. Q5: NOT STARTED. Stable v2.0.2: NOT PUBLISHED.** Current published stable is v2.0.1.
+- Next: verify post-merge `main` CI, build v2.0.2 Q5-specific no-rebuild control, download/verify **this exact** frozen Q4 artifact, run offline smoke, publish only after Q5 gate PASS, re-download published ZIP and validate checksum/tag.
