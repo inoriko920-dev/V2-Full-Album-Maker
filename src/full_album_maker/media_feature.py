@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from . import async_import as async_mod, visual_feature as visual_mod
 from .media_library_model import MediaAddToAlbumCommand, MediaLibraryIndex, MediaType, stable_asset_id
-from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, SidecarWriteConflict, SidecarStoreError, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
+from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, SidecarWriteConflict, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
 from .media_workspace import MediaContextWidget, MediaInspectorWidget, MediaTimelinePreviewCanvas, MediaWorkspace
 
 _installed=False; _originals:dict[str,Any]={}
@@ -99,7 +99,9 @@ def _refresh_media(self,reset=False):
     if not self._s03_store.is_loaded:
         try:
             self._s03_store.load()
-        except SidecarStoreError as exc:
+        except OSError as exc:
+            # SidecarStoreError covers unreadable metadata; raw OSError covers
+            # lock contention and other temporary filesystem failures.
             warning_key=(str(self._s03_store.path or ''),str(exc))
             if warning_key!=getattr(self,'_s03_sidecar_read_error_key',None):
                 self._s03_sidecar_read_error_key=warning_key
