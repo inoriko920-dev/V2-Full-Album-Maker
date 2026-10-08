@@ -350,3 +350,19 @@ This **supersedes** previous v2.0.4 Q4-only, Q5-pending and v2.0.3-as-latest sec
 - Source of truth: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`, `docs/implementation/Q5_V2_0_4_EVIDENCE.md`, `docs/RELEASE_NOTES_v2.0.4.md` and `docs/release/V2_0_4_GATE_PLAN.md`.
 - Previously published v2.0.3, v2.0.2, v2.0.1 and v2.0.0 stable tags/assets/checksums unchanged; original `inoriko920-dev/Full-Album-Maker` repo never modified.
 - **Next:** verify protected-main Windows CI after post-release documentation PR. Future executable changes require a new version and separate fresh Q4/Q5. Do not overwrite v2.0.4 or older ZIPs/tags.
+
+## October 8, 2026 — v2.0.5 Q4 FROZEN / Q5 NOT STARTED (latest)
+
+This supersedes earlier v2.0.4-as-current-source and v2.0.5-planning-only statuses, while retaining their original published-release evidence.
+
+- **Current active version in source:** 2.0.5 candidate. **Latest published stable:** v2.0.4 (unchanged).
+- Source bug fix PR #57: Beat Analysis malformed cache eviction/recomputation, 8 regression cases; merged as `e5bd1a68b8cd3dd14edd41f51676c7d9f84bd5f1`, protected-main CI `37750771995` PASS (790 tests).
+- Planning gate PR #58: DOCX and Markdown `docs/release/V2_0_5_GATE_PLAN.md`, protected-main CI `37752580397` PASS (790 tests).
+- P01 candidate PR #59: version metadata 2.0.5, unpublished notes and guarded stable-v2.0.4 tests; protected-main CI `37754027240` PASS (791 tests).
+- **Q4 PASS/FROZEN**: exact frozen candidate SHA `645fa166aa7a4cdc372b80c82db09026a7ab9b95`; isolated Windows run `37754857699` PASS (791 regressions + pinned FFmpeg filter-script test + portable A/V smoke). PR #60 exact-head Windows run `37754885928` PASS.
+- Exact **inner** `Full-Album-Maker-v2.0.5-Windows-Portable.zip`: **189598540 bytes**; SHA-256 `8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`.
+- Actions wrapper artifact ID `11540026862`, name `q4-v2.0.5-windows-artifact-candidate`; **its wrapper size/hash are different** from the inner portable ZIP.
+- PR #60 Q4 workflow squash-merged into protected main as `5b3e4af92ece9b7e36e3209ac8207b802a31df6b`, which is **not** frozen source SHA. Protected-main run `37755534261` must be independently confirmed SUCCESS before Q5.
+- Q4 evidence: `docs/implementation/Q4_V2_0_5_EVIDENCE.md`, release gates: `docs/release/V2_0_5_GATE_PLAN.md`.
+- Q5 **NOT STARTED**. No v2.0.5 tag or published release. Do not treat ordinary Actions validation ZIP as stable. First verify post-PR #60 main CI and this evidence PR's exact-head and protected-main CI; only then begin Q5 no-rebuild release.
+- v2.0.4 stable source `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, ZIP **189599237 bytes**, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b` is immutable. Other earlier stable assets and the original `inoriko920-dev/Full-Album-Maker` repo are likewise untouched.

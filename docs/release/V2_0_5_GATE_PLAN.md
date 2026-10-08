@@ -1,6 +1,6 @@
 # P01 v2.0.5 — patch candidate release quality plan (ASTRA → SOL)
 
-Status: **PLANNING ONLY; P01 NOT STARTED; Q4 NOT STARTED; Q5 NOT STARTED; v2.0.5 NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS/FROZEN; Q5 NOT STARTED; v2.0.5 NOT PUBLISHED**
 
 Documentation authored **8 October 2026 WIB**. The associated DOCX is the planning handoff; this Markdown is the machine-auditable source of truth.
 
@@ -78,3 +78,20 @@ No application code or UI should be changed by P01; this is version/release meta
 ## 7. Handoff and final acceptance
 
 A user-downloadable **v2.0.5 stable** is accepted only after source P01 gate, Q4 frozen artifact proof and independent no-rebuild Q5 publication/re-download PASS. All PASS claims must include exact GitHub run IDs, artifact IDs and SHA-256 in committed evidence. In the meantime, latest published stable is **v2.0.4** (see its Q4/Q5 evidence). The original `Full-Album-Maker` repo and prior stable ZIPs/tags stay immutable. Read `docs/governance/AI_HANDOFF.md`, `docs/governance/PROJECT_STATUS.md`, `docs/governance/POST_RELEASE_MAINTENANCE.md` and older Q4/Q5 workflows as **references**, not a publishing shortcut.
+
+
+## Execution evidence — P01 & Q4, 8 October 2026
+
+This execution section supersedes the **earlier planning-only/NOT STARTED claims** in the historical P01/Q4 plan above; it does not modify their security and quality requirements.
+
+- Planning DOCX + Markdown via PR #58: exact-head Windows run `37752141905` **790 PASS**; protected-main run `37752580397` **790 PASS**.
+- v2.0.5 P01 metadata via PR #59: exact-head Windows run `37753417926` **791 PASS**; protected-main run `37754027240` **791 PASS**, at commit `2bd83e518cae4ffbcebf33b30506b61cce0375b3`.
+- Q4 PR #60 exact Windows candidate source SHA: `645fa166aa7a4cdc372b80c82db09026a7ab9b95`.
+- Isolated v2.0.5 Q4 run `37754857699`: **791 regression tests PASS + 1 pinned real FFmpeg external filter test PASS**, metadata/licensing/secret scan and extracted offline audio/video smoke PASS.
+- Frozen **inner portable ZIP**: `Full-Album-Maker-v2.0.5-Windows-Portable.zip`, exact **189598540 bytes**, SHA-256 **`8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`**.
+- Q4 GitHub Actions artifact wrapper ID `11540026862`, name `q4-v2.0.5-windows-artifact-candidate`; wrapper size/hash **differ** from the inner ZIP.
+- Independent PR #60 Windows run `37754885928`: **791 PASS** and portable smoke PASS.
+- PR #60 merged as `5b3e4af92ece9b7e36e3209ac8207b802a31df6b`. **This merge SHA must not replace the frozen Q4 candidate SHA.**
+- Independent protected-main CI after PR #60: run `37755534261`, **PENDING VERIFICATION** at the time this evidence was authored. Do not begin Q5 until SUCCESS and this evidence documentation PR + its postmerge CI also PASS.
+- Primary evidence: `docs/implementation/Q4_V2_0_5_EVIDENCE.md`.
+- **Q5 NOT STARTED, v2.0.5 NOT PUBLISHED.** Stable v2.0.4 remains the only latest downloadable ZIP until new Q5 no-rebuild publication is verified.
