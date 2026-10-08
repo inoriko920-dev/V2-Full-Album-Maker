@@ -106,6 +106,11 @@ def _usable_cached_preview(
     except (OSError, UnicodeError, json.JSONDecodeError):
         cache_manager.evict("media-preview", target, metadata)
         return False
+    if not isinstance(payload, dict):
+        # A valid JSON scalar/list is still an invalid cache record. Keep
+        # malformed disposable cache content from breaking a healthy preview.
+        cache_manager.evict("media-preview", target, metadata)
+        return False
     expected = {
         "version": cache_manager.version("media-preview"),
         "asset_id": asset.asset_id,
@@ -268,6 +273,10 @@ def invalidate_source(
         try:
             payload = json.loads(metadata.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            # A malformed cache entry must not abort invalidation of the
+            # remaining (valid) previews for the same source.
             continue
         if payload.get("source_key") != source_key:
             continue
