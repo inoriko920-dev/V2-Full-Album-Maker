@@ -7,8 +7,8 @@ import pytest
 
 from full_album_maker import __version__ as CURRENT_VERSION
 
-# README stays on the actual published stable until Q5 promotes v2.0.4.
-PUBLISHED_STABLE = "2.0.3"
+# README must match the Q5-verified published stable, not an earlier candidate.
+PUBLISHED_STABLE = "2.0.4"
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,16 +109,17 @@ def test_wrong_release_commit_is_rejected() -> None:
 
 
 
-def test_unpublished_candidate_does_not_replace_downloadable_stable() -> None:
-    assert CURRENT_VERSION == "2.0.4"
-    candidate = ROOT / "docs/RELEASE_NOTES_v2.0.4.md"
-    assert candidate.is_file()
-    text = candidate.read_text(encoding="utf-8")
-    assert "Status: **Release candidate — not published**" in text
-    assert "Q4 and Q5 pending" in text
+def test_current_version_matches_published_verified_release() -> None:
+    assert CURRENT_VERSION == PUBLISHED_STABLE == "2.0.4"
+    notes = (ROOT / "docs/RELEASE_NOTES_v2.0.4.md").read_text(encoding="utf-8")
+    assert "Status: **Stable — Q5 Release Quality Gate PASS**" in notes
+    assert "Q4 and Q5 PASS" in notes
+    evidence = (ROOT / "docs/implementation/Q5_V2_0_4_EVIDENCE.md").read_text(encoding="utf-8")
+    assert "Status: **PASS — Stable v2.0.4 PUBLISHED**" in evidence
+    assert "exact_zip_rebuilt = false" in evidence
+    assert "published_asset_redownload_verified = true" in evidence
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert f"releases/download/v{PUBLISHED_STABLE}/" in readme
-    assert "releases/download/v2.0.4/" not in readme
+    assert "releases/download/v2.0.4/" in readme
 
 
 def test_readme_preserves_historical_rescue_checksums() -> None:

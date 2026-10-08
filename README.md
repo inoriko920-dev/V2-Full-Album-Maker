@@ -6,29 +6,29 @@ Aplikasi pembuat video full-album berbasis Windows, dengan editor media/timeline
 
 ## Download — versi stabil terbaru
 
-**Full Album Maker v2.0.3 — Windows portable** (8 Oktober 2026)
+**Full Album Maker v2.0.4 — Windows portable** (8 Oktober 2026)
 
-- [Download ZIP Windows portable v2.0.3](https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/download/v2.0.3/Full-Album-Maker-v2.0.3-Windows-Portable.zip)
-- [Download SHA256SUMS.txt](https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/download/v2.0.3/SHA256SUMS.txt)
-- [Catatan rilis v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
+- [Download ZIP Windows portable v2.0.4](https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/download/v2.0.4/Full-Album-Maker-v2.0.4-Windows-Portable.zip)
+- [Download SHA256SUMS.txt](https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/download/v2.0.4/SHA256SUMS.txt)
+- [Catatan rilis v2.0.4](docs/RELEASE_NOTES_v2.0.4.md)
 - [Semua GitHub Releases](https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases)
 
 Identitas ZIP yang dipublikasikan dan diuji:
 
 | Properti | Nilai |
 | --- | --- |
-| Nama | `Full-Album-Maker-v2.0.3-Windows-Portable.zip` |
-| Ukuran | **189.599.847 byte** |
-| SHA-256 | `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0` |
-| Tag | `v2.0.3` |
-| Commit sumber rilis | `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d` |
+| Nama | `Full-Album-Maker-v2.0.4-Windows-Portable.zip` |
+| Ukuran | **189.599.237 byte** |
+| SHA-256 | `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b` |
+| Tag | `v2.0.4` |
+| Commit sumber rilis | `af5af1ce24aba17ff68d469390a0c3d21f80f44d` |
 
 **Cara menggunakan:** unduh ZIP, ekstrak ke folder yang dapat ditulis di Windows 11, lalu jalankan `Full Album Maker.exe` dari hasil ekstraksi. Jangan menjalankan executable langsung dari dalam ZIP. Simpan versi lama di folder terpisah jika ingin rollback. Paket portable sudah membundel FFmpeg/FFprobe dan dependensi runtime; pengguna tidak perlu memasang Python secara global untuk menjalankannya. Fitur AI yang menggunakan layanan eksternal tetap memerlukan konfigurasi provider yang sesuai.
 
 Untuk memeriksa ZIP di PowerShell:
 
 ```powershell
-Get-FileHash .\Full-Album-Maker-v2.0.3-Windows-Portable.zip -Algorithm SHA256
+Get-FileHash .\Full-Album-Maker-v2.0.4-Windows-Portable.zip -Algorithm SHA256
 ```
 
 Nilai yang muncul harus cocok dengan SHA-256 pada tabel atau `SHA256SUMS.txt`. Hentikan penggunaan file jika tidak cocok.
@@ -60,7 +60,7 @@ Build memerlukan lingkungan Windows dan koneksi untuk mengambil dependensi serta
 
 ## Jaminan rilis dan riwayat
 
-Rilis v2.0.3 telah melewati dua gate terpisah: [Q4 — Windows build/test/freeze](docs/implementation/Q4_V2_0_3_EVIDENCE.md) dan [Q5 — publikasi ZIP Q4 tanpa rebuild](docs/implementation/Q5_V2_0_3_EVIDENCE.md). Q5 mengunduh dan memeriksa ulang aset publikasi, termasuk ukuran, hash dan target commit tag. Rilis sebelumnya `v2.0.2`, `v2.0.1` dan `v2.0.0` tetap tersedia sebagai pilihan rollback.
+Rilis v2.0.4 telah melewati dua gate terpisah: [Q4 — Windows build/test/freeze](docs/implementation/Q4_V2_0_4_EVIDENCE.md) dan [Q5 — publikasi ZIP Q4 tanpa rebuild](docs/implementation/Q5_V2_0_4_EVIDENCE.md). Q5 mengunduh ulang dan memverifikasi aset publikasi, termasuk ukuran, SHA-256 dan commit sumber tag. Rilis sebelumnya `v2.0.3`, `v2.0.2`, `v2.0.1` dan `v2.0.0` tetap tersedia sebagai pilihan rollback.
 
 Untuk melanjutkan pekerjaan di sesi atau AI lain, baca [AI handoff](docs/governance/AI_HANDOFF.md), [status proyek](docs/governance/PROJECT_STATUS.md), dan dokumen keputusan yang dirujuk oleh keduanya. Setiap perubahan executable harus dibuat pada branch terpisah, melewati CI, dan dirilis dengan versi serta Q4/Q5 baru; jangan mengganti ZIP/tag stabil yang sudah dipublikasikan.
 
