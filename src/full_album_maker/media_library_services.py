@@ -364,6 +364,11 @@ class MediaSidecarStore:
         """True while a failed/deferred save still has metadata to publish."""
         return bool(self._dirty_records or self._pending_migrations)
 
+    @property
+    def is_loaded(self) -> bool:
+        """Whether the sidecar has been read successfully or fail-closed."""
+        return self._loaded
+
     def _quarantine_corrupt_store(
         self,
         target: Path,
