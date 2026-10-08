@@ -1,6 +1,6 @@
 # v2.0.1 Maintenance Release — Gate Plan
 
-Status: **P01 PASS; Q4 PASS / FROZEN; Q5 NOT STARTED — NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS; Q5 PASS — STABLE v2.0.1 PUBLISHED**
 
 ## Authority
 
@@ -23,14 +23,14 @@ Status: **P01 PASS; Q4 PASS / FROZEN; Q5 NOT STARTED — NOT PUBLISHED**
 - Documentation-only commits after freeze may not trigger or mutate the artifact.
 - Reject any changed code, dependencies, version or build semantics after freeze without a new Q4 run.
 
-### P03 — No-rebuild release Q5 (NEXT STEP; NOT STARTED)
+### P03 — No-rebuild release Q5 (COMPLETE / PASS)
 - Use a new `v2.0.1`-specific publication control, not the historical hardcoded v2.0.0 Q5 workflow.
 - Download the frozen Q4 Actions artifact (never build again).
 - Verify version, exact ZIP checksum and bytes, candidate ancestry, provenance, bundled FFmpeg/font, isolation smoke and release notes.
 - Verify `v2.0.1` tag/release unused and `v2.0.0` rollback published.
 - Only then create stable tag and release; re-download assets, verify checksums/bytes and record evidence.
 
-### P04 — After publication
+### P04 — After publication (evidence and handoff recorded)
 - Record immutable release identity in project handoff and release docs.
 - Retain the prior `v2.0.0` ZIP unchanged for side-by-side rollback.
 - Do not claim completion until the exact published assets are re-downloaded and verified.
@@ -55,4 +55,6 @@ Review the latest `release/prepare-v2.0.1-20261008` PR and its exact CI head. Ne
 
 **Q4 result:** PR #33 merged. Exact candidate SHA `35a8c195469d49d7f7938b31761ceb17c4c720e0`, Actions run `37724287381`, artifact ID `11527152731`, inner ZIP `Full-Album-Maker-v2.0.1-Windows-Portable.zip`, 189598786 bytes, SHA-256 `6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d`. The Q4 artifact is frozen; never rebuild it for Q5. Full details: `docs/implementation/Q4_V2_0_1_EVIDENCE.md`.
 
-**Next authorized action:** begin the **separate v2.0.1 Q5 no-rebuild release gate** only upon explicit continuation. Q4 PASS does not authorize automatic stable publication.
+**Q5 outcome:** stable v2.0.1 published after exact Q4 no-rebuild verification on workflow run `37725395630`. Published release ID `406399261`; tag target `35a8c195469d49d7f7938b31761ceb17c4c720e0`. Exact ZIP: 189598786 bytes, SHA-256 `6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d`. GitHub Release assets were re-downloaded and verified. Evidence: `docs/implementation/Q5_V2_0_1_EVIDENCE.md`.
+
+**Next authorized action:** routine v2.0.1 post-release maintenance only; do not rebuild or overwrite the published ZIP or stable tags.
