@@ -66,7 +66,7 @@ def _refresh_media(self,reset=False):
                 carry_current=True,
                 persist=bool(self._foundation_project_path),
             )
-        except OSError as exc:
+        except (OSError, SidecarMigrationConflict) as exc:
             # Project Save/Save As remains authoritative even when auxiliary
             # media metadata persistence is temporarily unavailable. Keep the
             # current sidecar records dirty/in-memory and surface the problem.
