@@ -951,3 +951,108 @@ def test_sidecar_load_retries_after_orphan_cleanup_failure(
     assert store.get("asset").description == "on disk"
     assert attempts == 2
     assert target.read_bytes() == original
+
+
+def test_deferred_relink_blocks_foreign_old_id_only_on_save_as(
+    tmp_path: Path,
+) -> None:
+    source = MediaSidecarStore(None)
+    source.set("old-id", SidecarRecord(tags=("original-source",)), persist=False)
+    source.migrate_asset_id("old-id", "new-id", persist=False)
+
+    destination = tmp_path / "ForeignOldOnly.json"
+    destination.write_text("{}", encoding="utf-8")
+    foreign = MediaSidecarStore(destination)
+    foreign.set("old-id", SidecarRecord(tags=("foreign-old",)))
+    before = foreign.path.read_bytes()
+
+    try:
+        source.rebind_project_path(destination, carry_current=True, persist=True)
+    except SidecarMigrationConflict:
+        pass
+    else:
+        raise AssertionError("Foreign old-ID metadata must block Save As relink")
+
+    assert foreign.path.read_bytes() == before
+    assert MediaSidecarStore(destination).get("old-id").tags == ("foreign-old",)
+    assert source.get("new-id").tags == ("original-source",)
+    assert source.has_pending_changes is True
+
+    # A retry cannot silently overwrite the destination either.
+    try:
+        source.save()
+    except SidecarMigrationConflict:
+        pass
+    else:
+        raise AssertionError("Retry must remain fail-closed")
+    assert foreign.path.read_bytes() == before
+
+
+def test_deferred_relink_accepts_same_value_old_id_and_preserves_other_assets(
+    tmp_path: Path,
+) -> None:
+    record = SidecarRecord(favorite=True, tags=("same-source",))
+    source = MediaSidecarStore(None)
+    source.set("old-id", record, persist=False)
+    source.migrate_asset_id("old-id", "new-id", persist=False)
+
+    destination = tmp_path / "SameOldSafe.json"
+    destination.write_text("{}", encoding="utf-8")
+    existing = MediaSidecarStore(destination)
+    existing.set("old-id", record)
+    existing.set("other-id", SidecarRecord(description="unrelated"))
+
+    assert source.rebind_project_path(destination, persist=True)
+    latest = MediaSidecarStore(destination)
+    assert "old-id" not in latest.records()
+    assert latest.get("new-id") == record
+    assert latest.get("other-id").description == "unrelated"
+    assert source.has_pending_changes is False
+
+
+def test_deferred_relink_chain_blocks_foreign_original_id(
+    tmp_path: Path,
+) -> None:
+    source = MediaSidecarStore(None)
+    source.set("asset-a", SidecarRecord(description="source-a"), persist=False)
+    source.migrate_asset_id("asset-a", "asset-b", persist=False)
+    source.migrate_asset_id("asset-b", "asset-c", persist=False)
+    assert source.get("asset-c").description == "source-a"
+
+    destination = tmp_path / "ForeignChain.json"
+    destination.write_text("{}", encoding="utf-8")
+    disk = MediaSidecarStore(destination)
+    disk.set("asset-a", SidecarRecord(description="foreign-a"))
+    original = disk.path.read_bytes()
+    try:
+        source.rebind_project_path(destination, persist=True)
+    except SidecarMigrationConflict:
+        pass
+    else:
+        raise AssertionError("Chained relink must validate original foreign ID")
+
+    assert disk.path.read_bytes() == original
+    assert source.get("asset-c").description == "source-a"
+    assert source.has_pending_changes is True
+
+
+def test_deferred_relink_without_local_source_does_not_move_foreign_record(
+    tmp_path: Path,
+) -> None:
+    source = MediaSidecarStore(None)
+    source.migrate_asset_id("absent-local", "new-id", persist=False)
+    destination = tmp_path / "UnknownOld.json"
+    destination.write_text("{}", encoding="utf-8")
+    foreign = MediaSidecarStore(destination)
+    foreign.set("absent-local", SidecarRecord(description="foreign-only"))
+    before = foreign.path.read_bytes()
+
+    try:
+        source.rebind_project_path(destination, persist=True)
+    except SidecarMigrationConflict:
+        pass
+    else:
+        raise AssertionError("Absent local source must not migrate foreign data")
+
+    assert foreign.path.read_bytes() == before
+    assert source.has_pending_changes is True
