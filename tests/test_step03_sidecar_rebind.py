@@ -374,3 +374,49 @@ def test_media_refresh_persistent_read_error_warns_once_and_stays_retryable(
     assert not fake._s03_store.persistence_blocked
     assert fake._s03_store.quarantined_path is None
     assert target.read_bytes() == before
+
+
+def test_media_refresh_sidecar_lock_timeout_stays_retryable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from contextlib import contextmanager
+    from full_album_maker import media_library_services
+
+    monkeypatch.setattr(media_feature.visual_mod, "images", lambda _project: [])
+    saved = tmp_path / "OtherInstanceLocked.json"
+    saved.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(saved)
+    seed.update("asset", description="untouched during lock timeout")
+    target = seed.path
+    assert target is not None
+    original_bytes = target.read_bytes()
+
+    fake = _fake(Project())
+    fake.project = Project()
+    fake._foundation_project_path = str(saved)
+    real_lock = media_library_services._sidecar_file_lock
+    attempts = 0
+
+    @contextmanager
+    def fail_lock_once(path: Path):
+        nonlocal attempts
+        if path == target:
+            attempts += 1
+            if attempts == 1:
+                raise OSError("metadata lock held by another instance")
+        with real_lock(path):
+            yield
+
+    monkeypatch.setattr(media_library_services, "_sidecar_file_lock", fail_lock_once)
+    media_feature._refresh_media(fake, reset=True)
+    assert fake._s03_store.is_loaded is False
+    assert fake._s03_store.quarantined_path is None
+    assert target.read_bytes() == original_bytes
+    assert any("coba refresh" in message for message in fake.log.lines)
+
+    media_feature._refresh_media(fake, reset=False)
+    assert fake._s03_store.is_loaded is True
+    assert fake._s03_store.get("asset").description == "untouched during lock timeout"
+    assert attempts == 2
+    assert target.read_bytes() == original_bytes
