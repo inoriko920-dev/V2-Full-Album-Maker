@@ -1,10 +1,9 @@
-"""Keep public README aligned with verified, published stable identity.
+"""Prevent the public README from drifting from the verified Q5 release."""
 
-The README is the first page a Windows user sees on GitHub. In particular it
-must not regress to old recovery-only copy after a new stable is published.
-"""
-
+import re
 from pathlib import Path
+
+import pytest
 
 from full_album_maker import __version__
 
@@ -12,32 +11,98 @@ from full_album_maker import __version__
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_readme_describes_current_stable_download_and_checksum() -> None:
+def _capture(text: str, pattern: str, field: str) -> str:
+    match = re.search(pattern, text, flags=re.MULTILINE)
+    assert match is not None, f"Missing or malformed {field}"
+    return match.group(1)
+
+
+def _table_code(text: str, label: str) -> str:
+    return _capture(
+        text,
+        rf"^\|\s*{re.escape(label)}\s*\|\s*`([^`\r\n]+)`\s*\|\s*$",
+        label,
+    )
+
+
+def _verify_exact_published_identity(readme: str, notes: str, evidence: str) -> None:
+    """Match the three *named* release fields, never an arbitrary common hash."""
+    q5_sha = _table_code(evidence, "Exact portable ZIP SHA-256")
+    readme_sha = _table_code(readme, "SHA-256")
+    notes_sha = _capture(notes, r"^- ZIP SHA-256:\s*`([0-9a-f]{64})`\s*\.?$", "release notes ZIP SHA-256")
+    assert re.fullmatch(r"[0-9a-f]{64}", q5_sha), "Invalid Q5 ZIP SHA-256"
+    assert readme_sha == notes_sha == q5_sha, "Published portable ZIP SHA-256 does not match Q5"
+
+    q5_bytes = _table_code(evidence, "Exact ZIP bytes")
+    readme_bytes = _capture(
+        readme, r"^\|\s*Ukuran\s*\|\s*\*\*([0-9.]+) byte\*\*\s*\|\s*$",
+        "README ZIP size",
+    ).replace(".", "")
+    notes_bytes = _capture(
+        notes, r"^- ZIP size:\s*\*\*(\d+) bytes\*\*\.?$", "release notes ZIP size",
+    )
+    assert q5_bytes.isdecimal(), "Invalid Q5 ZIP size"
+    assert readme_bytes == notes_bytes == q5_bytes, "Published ZIP byte size does not match Q5"
+
+    q5_commit = _table_code(evidence, "Exact Q4 candidate source and tag commit")
+    readme_commit = _table_code(readme, "Commit sumber rilis")
+    notes_commit = _capture(
+        notes,
+        rf"^- Tag: `v{re.escape(__version__)}`, targets exact Q4 source commit `([0-9a-f]{{40}})`\.$",
+        "release notes Q4 commit",
+    )
+    assert re.fullmatch(r"[0-9a-f]{40}", q5_commit), "Invalid Q5 source commit"
+    assert readme_commit == notes_commit == q5_commit, "Published tag commit does not match Q5"
+    assert _table_code(evidence, "Stable version and tag") == f"v{__version__}"
+
+
+def _release_documents() -> tuple[str, str, str]:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     notes = ROOT / f"docs/RELEASE_NOTES_v{__version__}.md"
-    assert notes.is_file()
-    notes_text = notes.read_text(encoding="utf-8")
-    assert "Status: **Stable — Q5 Release Quality Gate PASS**" in notes_text
-    assert "Q4 and Q5 PASS" in notes_text
+    evidence = ROOT / f"docs/implementation/Q5_V{__version__.replace('.', '_')}_EVIDENCE.md"
+    assert notes.is_file(), "Published version release notes are missing"
+    assert evidence.is_file(), "Published version Q5 evidence is missing"
+    return readme, notes.read_text(encoding="utf-8"), evidence.read_text(encoding="utf-8")
+
+
+def test_readme_describes_current_stable_download_and_checksum() -> None:
+    readme, notes, evidence = _release_documents()
+    assert "Status: **Stable — Q5 Release Quality Gate PASS**" in notes
+    assert "Q4 and Q5 PASS" in notes
+    assert "published_asset_redownload_verified = true" in evidence
+    assert "exact_zip_rebuilt = false" in evidence
 
     filename = f"Full-Album-Maker-v{__version__}-Windows-Portable.zip"
     assert f"Full Album Maker v{__version__}" in readme
     assert f"releases/download/v{__version__}/{filename}" in readme
     assert f"releases/download/v{__version__}/SHA256SUMS.txt" in readme
     assert f"docs/RELEASE_NOTES_v{__version__}.md" in readme
-
-    evidence = ROOT / f"docs/implementation/Q5_V{__version__.replace('.', '_')}_EVIDENCE.md"
-    assert evidence.is_file()
-    evidence_text = evidence.read_text(encoding="utf-8")
-    assert "published_asset_redownload_verified = true" in evidence_text
-    assert "exact_zip_rebuilt = false" in evidence_text
-    # The public checksum and exact immutable Q4 target must come from the
-    # completed release gate rather than a candidate or local build.
-    import re
-    hashes = set(re.findall(r"(?<![a-f0-9])[a-f0-9]{64}(?![a-f0-9])", notes_text))
-    assert hashes.intersection(re.findall(r"(?<![a-f0-9])[a-f0-9]{64}(?![a-f0-9])", readme))
+    _verify_exact_published_identity(readme, notes, evidence)
     assert "Repository asli" in readme
     assert "Source code asli belum sepenuhnya dipulihkan" not in readme
+
+
+def test_unrelated_hash_cannot_hide_wrong_public_zip_checksum() -> None:
+    readme, notes, evidence = _release_documents()
+    published_sha = _table_code(readme, "SHA-256")
+    bad_readme = readme.replace(
+        f"| SHA-256 | `{published_sha}` |", f"| SHA-256 | `{'0' * 64}` |",
+    )
+    assert bad_readme != readme
+    with pytest.raises(AssertionError, match="Published portable ZIP SHA-256"):
+        _verify_exact_published_identity(bad_readme, notes, evidence)
+
+
+def test_wrong_release_commit_is_rejected() -> None:
+    readme, notes, evidence = _release_documents()
+    published_commit = _table_code(readme, "Commit sumber rilis")
+    bad_readme = readme.replace(
+        f"| Commit sumber rilis | `{published_commit}` |",
+        f"| Commit sumber rilis | `{'0' * 40}` |",
+    )
+    assert bad_readme != readme
+    with pytest.raises(AssertionError, match="Published tag commit"):
+        _verify_exact_published_identity(bad_readme, notes, evidence)
 
 
 def test_readme_preserves_historical_rescue_checksums() -> None:
