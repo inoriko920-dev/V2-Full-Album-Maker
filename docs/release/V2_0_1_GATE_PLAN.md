@@ -1,6 +1,6 @@
 # v2.0.1 Maintenance Release — Gate Plan
 
-Status: **PREPARATION IN PROGRESS; NOT APPROVED FOR PUBLICATION**
+Status: **P01 PASS; Q4 PASS / FROZEN; Q5 NOT STARTED — NOT PUBLISHED**
 
 ## Authority
 
@@ -17,13 +17,13 @@ Status: **PREPARATION IN PROGRESS; NOT APPROVED FOR PUBLICATION**
 - Preserve the historical Q5 v2.0.0 evidence and adjust tests that hardcoded 2.0.0 to distinguish frozen stable from new candidate.
 - Require an exact Windows portable validation PASS on the final head before merge.
 
-### P02 — Frozen Windows candidate Q4 (BLOCKED until P01 PASS)
+### P02 — Frozen Windows candidate Q4 (COMPLETE / PASS)
 - Run a version-aware Windows artifact gate from a separate candidate ref. Include exact output ZIP, extracted smoke, full regression, notices and supply-chain checks, secret scan and third-party pin parity.
 - Record exact commit, build run ID, artifact ID, ZIP bytes and SHA-256. Freeze the triple `version | SHA | digest`.
 - Documentation-only commits after freeze may not trigger or mutate the artifact.
 - Reject any changed code, dependencies, version or build semantics after freeze without a new Q4 run.
 
-### P03 — No-rebuild release Q5 (BLOCKED until P02 PASS)
+### P03 — No-rebuild release Q5 (NEXT STEP; NOT STARTED)
 - Use a new `v2.0.1`-specific publication control, not the historical hardcoded v2.0.0 Q5 workflow.
 - Download the frozen Q4 Actions artifact (never build again).
 - Verify version, exact ZIP checksum and bytes, candidate ancestry, provenance, bundled FFmpeg/font, isolation smoke and release notes.
@@ -51,4 +51,8 @@ Status: **PREPARATION IN PROGRESS; NOT APPROVED FOR PUBLICATION**
 Read `docs/governance/AI_HANDOFF.md`, `docs/governance/PROJECT_STATUS.md`, `docs/governance/POST_RELEASE_MAINTENANCE.md`, `docs/implementation/Q4_WINDOWS_ARTIFACT_QUALITY_GATE.md` and `docs/implementation/Q5_RELEASE_QUALITY_GATE.md`; preserve original frozen v2.0.0.
 Review the latest `release/prepare-v2.0.1-20261008` PR and its exact CI head. Never re-use v2.0.0 workflow hardcoded candidate tuple to publish v2.0.1.
 
-**Next authorized action:** complete P01 candidate PR and Windows gate. Do not publish in this preparation stage.
+**P01 result:** PR #32 merged; Windows CI on main PASS (`37724111066`).
+
+**Q4 result:** PR #33 merged. Exact candidate SHA `35a8c195469d49d7f7938b31761ceb17c4c720e0`, Actions run `37724287381`, artifact ID `11527152731`, inner ZIP `Full-Album-Maker-v2.0.1-Windows-Portable.zip`, 189598786 bytes, SHA-256 `6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d`. The Q4 artifact is frozen; never rebuild it for Q5. Full details: `docs/implementation/Q4_V2_0_1_EVIDENCE.md`.
+
+**Next authorized action:** begin the **separate v2.0.1 Q5 no-rebuild release gate** only upon explicit continuation. Q4 PASS does not authorize automatic stable publication.
