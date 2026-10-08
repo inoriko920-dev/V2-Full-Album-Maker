@@ -1171,3 +1171,64 @@ def test_sidecar_invalid_utf8_still_quarantines_genuinely_corrupt_bytes(
     assert store.quarantined_path.read_bytes() == bad_data
     assert not target.exists()
     assert "karantina" in store.last_recovery_warning
+
+
+def test_scan_folder_skips_windows_directory_junctions_without_skipping_siblings(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # On Windows a junction can point back to an ancestor while is_symlink()
+    # remains False. Simulate its is_junction() result deterministically on
+    # every OS so an infinite recursive scan can be detected by this test.
+    junction = tmp_path / "linked-back-to-parent"
+    junction.mkdir()
+    (junction / "should-not-import.mp3").write_bytes(b"hidden through junction")
+
+    nested = tmp_path / "normal-nested"
+    nested.mkdir()
+    (nested / "regular Ω.wav").write_bytes(b"valid media")
+    (tmp_path / "top-level.mp4").write_bytes(b"valid media")
+    (tmp_path / "ignore.md").write_text("ignored", encoding="utf-8")
+
+    real_is_junction = Path.is_junction
+    visited_junction = []
+
+    def simulated_windows_junction(self: Path) -> bool:
+        if self == junction:
+            visited_junction.append(str(self))
+            return True
+        return real_is_junction(self)
+
+    monkeypatch.setattr(Path, "is_junction", simulated_windows_junction)
+    assert junction.is_symlink() is False
+    discovered = list(media_services.scan_folder(tmp_path))
+    assert visited_junction == [str(junction)]
+    assert {entry.name for entry in discovered} == {
+        "regular Ω.wav", "top-level.mp4",
+    }
+    assert "should-not-import.mp3" not in {entry.name for entry in discovered}
+
+
+def test_scan_folder_keeps_deterministic_order_with_junction_skipped(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    junction = tmp_path / "B-junction"
+    junction.mkdir()
+    (junction / "must-skip.flac").write_bytes(b"skip")
+    nested = tmp_path / "A-normal"
+    nested.mkdir()
+    (nested / "01.wav").write_bytes(b"ok")
+    (tmp_path / "02.mp3").write_bytes(b"ok")
+
+    real_is_junction = Path.is_junction
+    monkeypatch.setattr(
+        Path, "is_junction",
+        lambda self: self == junction or real_is_junction(self),
+    )
+
+    first = media_services.collect_folder_paths(tmp_path)
+    second = media_services.collect_folder_paths(tmp_path)
+    assert first.paths == second.paths
+    assert {Path(p).name for p in first.paths} == {"01.wav", "02.mp3"}
+    assert first.canceled is False

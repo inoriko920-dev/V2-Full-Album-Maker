@@ -877,7 +877,9 @@ def scan_folder(root: str | Path, cancel: threading.Event | None = None) -> Iter
             if cancel.is_set():
                 return
             try:
-                if entry.is_symlink():
+                if entry.is_symlink() or entry.is_junction():
+                    # NTFS directory junctions do not always count as symlinks;
+                    # following one into an ancestor can loop indefinitely.
                     continue
                 if entry.is_dir():
                     if entry.name.casefold() not in IGNORED_DIRECTORY_NAMES and not entry.name.startswith('.'):
