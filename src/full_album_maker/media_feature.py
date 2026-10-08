@@ -66,7 +66,7 @@ def _refresh_media(self,reset=False):
                 carry_current=True,
                 persist=bool(self._foundation_project_path),
             )
-        except OSError as exc:
+        except (OSError, SidecarMigrationConflict) as exc:
             # Project Save/Save As remains authoritative even when auxiliary
             # media metadata persistence is temporarily unavailable. Keep the
             # current sidecar records dirty/in-memory and surface the problem.
@@ -77,10 +77,23 @@ def _refresh_media(self,reset=False):
                 self.foundation_state.set_status(
                     save=('Metadata media belum tersimpan','warning')
                 )
+    elif path is not None and self._s03_store.has_pending_changes:
+        # A failed First Save / Save As already rebound the store to this
+        # project path. Do not drop its dirty in-memory metadata on refresh.
+        # Retry against the latest on-disk sidecar under the store's lock.
+        try:
+            self._s03_store.save()
+        except (OSError, SidecarMigrationConflict) as exc:
+            self.log.appendPlainText(
+                f"Metadata Media masih belum tersimpan; data lokal dipertahankan: {exc}"
+            )
+            if hasattr(self,'foundation_state'):
+                self.foundation_state.set_status(
+                    save=('Metadata media belum tersimpan','warning')
+                )
     elif reset and path is not None:
-        # Explicit refresh of the same saved project should see the latest
-        # sidecar written by another process. Unsaved projects keep their
-        # in-memory metadata because there is no disk source to reload.
+        # Only discard/reload the store when no local changes are pending.
+        # Unsaved projects keep their in-memory metadata.
         self._s03_store=MediaSidecarStore(self._foundation_project_path)
         self._s03_store.load()
     self._s03_project=self.project

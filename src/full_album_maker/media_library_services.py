@@ -351,6 +351,11 @@ class MediaSidecarStore:
             return None
         return self.project_path.with_suffix(self.project_path.suffix + ".media.json")
 
+    @property
+    def has_pending_changes(self) -> bool:
+        """True while a failed/deferred save still has metadata to publish."""
+        return bool(self._dirty_records or self._pending_migrations)
+
     def _quarantine_corrupt_store(
         self,
         target: Path,
@@ -487,6 +492,21 @@ class MediaSidecarStore:
         latest: dict[str, SidecarRecord],
     ) -> dict[str, SidecarRecord]:
         for old_id, new_id in self._pending_migrations:
+            # On First Save / Save As the destination sidecar may contain
+            # new_id but not old_id. _apply_one_migration() then has no disk
+            # source to compare, while the local dirty snapshot would
+            # otherwise overwrite an unrelated destination record.
+            local_destination = self._records.get(new_id)
+            disk_destination = latest.get(new_id)
+            if (
+                local_destination is not None
+                and disk_destination is not None
+                and local_destination != disk_destination
+            ):
+                raise SidecarMigrationConflict(
+                    "Metadata tujuan relink sudah ada dan berbeda; "
+                    "penyimpanan dibatalkan agar data tujuan tidak tertimpa."
+                )
             self._apply_one_migration(latest, old_id, new_id)
         rebuilding_from_quarantine = (
             self.quarantined_path is not None
