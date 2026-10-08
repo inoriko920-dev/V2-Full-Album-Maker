@@ -1,6 +1,6 @@
 # V2-Full-Album-Maker — v2.0.3 patch candidate release gate plan
 
-Status: **P01 IN PROGRESS; Q4 NOT STARTED; Q5 NOT STARTED; NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS / FROZEN; Q5 NOT STARTED — NOT PUBLISHED**
 
 ## Fixed source scope
 
@@ -20,7 +20,7 @@ The only executable change relative to v2.0.2 is the post-release **PR #45** pre
 - Require full Windows regression, pinned FFT/FFmpeg validation, portable build and extracted offline audio/video smoke PASS on the *exact PR head*.
 - Merge to protected `main` only after PASS; independently verify postmerge Windows CI success.
 
-## Q4 — Windows artifact freeze (BLOCKED until P01 PASS)
+## Q4 — Windows artifact freeze (COMPLETE / PASS)
 
 - Add a **separate v2.0.3 Q4 workflow**, based on the verified v2.0.2 Q4 workflow without altering historical controls.
 - Verify `2.0.3` across app/package/manifest/release notes and bundled capabilities.
@@ -29,7 +29,7 @@ The only executable change relative to v2.0.2 is the post-release **PR #45** pre
 - Record Q4 exact candidate SHA, run/job IDs, Actions artifact ID/name, **inner portable ZIP** exact byte count and SHA-256 in a dedicated immutable evidence document.
 - Freeze the full tuple. A later squash-merge SHA is *not* the candidate SHA. Any code/build change after freeze requires a fresh Q4 run.
 
-## Q5 — No-rebuild publication (BLOCKED until Q4 PASS)
+## Q5 — No-rebuild publication (NEXT — NOT STARTED)
 
 - Add an isolated v2.0.3 release workflow from the frozen Q4 commit; **never edit or re-run** historical publication controls to create a new release.
 - Verify v2.0.3 tag/release unused, v2.0.2 stable exists for rollback, and frozen Q4 run/commit/artifact provenance matches.
@@ -54,4 +54,8 @@ The only executable change relative to v2.0.2 is the post-release **PR #45** pre
 Read Software Factory governance in `docs/governance/AI_HANDOFF.md`, `docs/governance/PROJECT_STATUS.md`, `docs/governance/POST_RELEASE_MAINTENANCE.md`, and previous version evidence `docs/implementation/Q4_V2_0_2_EVIDENCE.md`, `docs/implementation/Q5_V2_0_2_EVIDENCE.md`.
 Check current PR head SHA and all CI outcomes; **do not trust earlier "PASS" claims without the exact successful run**.
 
-**Next step:** complete P01 PR testing and verify post-merge source CI. Do not advance to Q4 or create stable v2.0.3 without the full sequence.
+**P01 result:** PR #46 merged; independent protected-main Windows CI `37736088109` PASS on `03e55e009d8c38bbc554162d3a77945f7b2b3b29`.
+
+**Q4 result:** PR #47 merged. Exact Q4 candidate/source SHA `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d`; Windows Q4 run `37736530557` PASS (775 regression tests and separate FFmpeg test), artifact ID `11531549824`. Frozen inner ZIP `Full-Album-Maker-v2.0.3-Windows-Portable.zip`, `189599847` bytes, SHA-256 `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0`. Evidence: `docs/implementation/Q4_V2_0_3_EVIDENCE.md`. Protected-main Windows CI after PR #47: run `37737069774`, must independently PASS before Q5.
+
+**Next step:** independent Q5 v2.0.3 no-rebuild gate, only after above CI prerequisites PASS. No publication until Q5 and release asset re-download pass.
