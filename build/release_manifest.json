@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "target_stable_version": "2.0.3",
+  "target_stable_version": "2.0.4",
   "platform": "Windows x86_64 portable onedir",
   "python": {
     "version": "3.12.10",
