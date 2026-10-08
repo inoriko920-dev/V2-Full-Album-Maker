@@ -319,3 +319,20 @@ This supersedes older "v2.0.2 Q4 not started" statements. `v2.0.1` remains the l
 - CI after PR #41 merge: `37732736075`, must be checked before Q5 execution.
 - **Q4: PASS/FROZEN. Q5: NOT STARTED. Stable v2.0.2: NOT PUBLISHED.** Current published stable is v2.0.1.
 - Next: verify post-merge `main` CI, build v2.0.2 Q5-specific no-rebuild control, download/verify **this exact** frozen Q4 artifact, run offline smoke, publish only after Q5 gate PASS, re-download published ZIP and validate checksum/tag.
+
+
+## October 8, 2026 — v2.0.2 stable release COMPLETED (latest)
+
+This section supersedes the earlier v2.0.2 "Q5 NOT STARTED" notices. Historical v2.0.0/v2.0.1 evidence must remain unchanged.
+
+- PR #37 and #39: metadata read/lock retry safety and Windows junction-scan loop fixes merged, tested.
+- PR #40: v2.0.2 candidate prepared and merged; `main` CI `37731780154` PASS.
+- PR #41: Q4 workflow merged; Q4 source SHA `2678b9f93364334c7eaf9ebad9ef7e079533716f`; Windows artifact run `37732261424` PASS (769 tests plus 1 pinned FFmpeg test).
+- Q4 frozen artifact ID `11530243260`; portable ZIP `Full-Album-Maker-v2.0.2-Windows-Portable.zip`; exactly `189599767` bytes; SHA-256 `701e0b68de17ec30ad17620d5cb5ef47e29bb28ca36ad0c95e5c242757c70c64`.
+- **Q5 v2.0.2 PASS/PUBLISHED** on run `37733519371`, control SHA `46b4970bc342a267bab36231aafcd323c0a073bc`.
+- GitHub Release ID `406458763`, published 2026-10-08 **12:40:50 WIB**. Tag `v2.0.2` directly targets exact Q4 SHA `2678b9f93364334c7eaf9ebad9ef7e079533716f`.
+- Published ZIP was independently re-downloaded and verified; no Q5 rebuild.
+- Latest release: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.2
+- Authoritative Q4 evidence: `docs/implementation/Q4_V2_0_2_EVIDENCE.md`; Q5 evidence: `docs/implementation/Q5_V2_0_2_EVIDENCE.md`.
+- v2.0.1 and v2.0.0 remain immutable historical stable rollback choices; original `inoriko920-dev/Full-Album-Maker` remains untouched.
+- **Current phase:** post-release maintenance. Future changed binaries require a new patch/minor version and their own Windows Q4/Q5 gates.
