@@ -820,3 +820,56 @@ def test_deferred_pending_conflict_blocks_unrelated_immediate_update(
 
     assert MediaSidecarStore(project).get("asset").favorite is False
     assert MediaSidecarStore(project).get("asset").description == "remote"
+
+
+def test_deferred_then_immediate_same_field_is_not_a_false_conflict(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DeferredThenImmediateSameField.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", tags=("baseline",), description="keep")
+
+    local = MediaSidecarStore(project)
+    remote = MediaSidecarStore(project)
+    local.load()
+    remote.load()
+    local.update("asset", tags=("pending",), persist=False)
+    remote.update("asset", favorite=True)
+    local.update("asset", tags=("final",))
+
+    actual = MediaSidecarStore(project).get("asset")
+    assert actual.tags == ("final",)
+    assert actual.favorite is True
+    assert actual.description == "keep"
+
+
+def test_deferred_fields_survive_quarantine_and_explicit_retry(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DeferredQuarantine.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", tags=("baseline",), description="last good")
+
+    local = MediaSidecarStore(project)
+    local.load()
+    local.update("asset", tags=("deferred",), persist=False)
+    target = local.path
+    assert target is not None
+    target.write_bytes(b'{"version": 1, "records":')
+
+    try:
+        local.save()
+    except SidecarCorruptionError:
+        pass
+    else:
+        raise AssertionError("Corrupt sidecar must be quarantined first")
+
+    assert local.quarantined_path is not None
+    assert local.quarantined_path.read_bytes() == b'{"version": 1, "records":'
+    assert local.save() is True
+
+    actual = MediaSidecarStore(project).get("asset")
+    assert actual.description == "last good"
+    assert actual.tags == ("deferred",)
