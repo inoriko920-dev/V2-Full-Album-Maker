@@ -483,13 +483,21 @@ class MediaSidecarStore:
     ) -> dict[str, SidecarRecord]:
         for old_id, new_id in self._pending_migrations:
             self._apply_one_migration(latest, old_id, new_id)
+        rebuilding_from_quarantine = (
+            self.quarantined_path is not None
+            and self.path is not None
+            and not self.path.exists()
+        )
         for dirty_id in tuple(self._dirty_records):
             local = self._records.get(dirty_id)
             if local is None:
                 continue
-            pending = self._pending_field_edits.get(dirty_id)
+            pending = (
+                None if rebuilding_from_quarantine
+                else self._pending_field_edits.get(dirty_id)
+            )
             if pending is None:
-                # set(), relink and Save As intentionally carry whole records.
+                # set(), relink, Save As and quarantine retry carry full records.
                 latest[dirty_id] = local
                 continue
             baseline, requested = pending
@@ -566,6 +574,18 @@ class MediaSidecarStore:
             if not self._loaded:
                 self.load()
             baseline = self._records.get(key, SidecarRecord())
+            pending = self._pending_field_edits.get(key)
+            if pending is not None:
+                # Local deferred edits are not external changes. Compare their
+                # requested fields against the original pre-edit baseline.
+                original, deferred_fields = pending
+                baseline_values = {
+                    name: getattr(baseline, name)
+                    for name in _SIDECAR_RECORD_FIELDS
+                }
+                for name in deferred_fields:
+                    baseline_values[name] = getattr(original, name)
+                baseline = SidecarRecord(**baseline_values)
             with _sidecar_file_lock(target):
                 disk_latest = self._read_latest_for_write(target)
                 rebuilding_after_quarantine = (
