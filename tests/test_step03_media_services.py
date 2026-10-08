@@ -873,3 +873,81 @@ def test_deferred_fields_survive_quarantine_and_explicit_retry(
     actual = MediaSidecarStore(project).get("asset")
     assert actual.description == "last good"
     assert actual.tags == ("deferred",)
+
+
+
+def test_sidecar_load_retries_after_initial_lock_timeout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from contextlib import contextmanager
+
+    project = tmp_path / "IntermittentLock.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", favorite=True, tags=("preserve",))
+
+    original_lock = media_services._sidecar_file_lock
+    attempts = 0
+
+    @contextmanager
+    def intermittent_lock(target: Path):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("Metadata Media lock busy")
+        with original_lock(target):
+            yield
+
+    monkeypatch.setattr(media_services, "_sidecar_file_lock", intermittent_lock)
+    store = MediaSidecarStore(project)
+    try:
+        store.get("asset")
+    except OSError as exc:
+        assert "lock busy" in str(exc)
+    else:
+        raise AssertionError("Initial lock timeout must propagate")
+
+    assert store._loaded is False
+    assert store.records()["asset"].tags == ("preserve",)
+    assert store.get("asset").favorite is True
+    assert attempts == 2
+
+
+def test_sidecar_load_retries_after_orphan_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "IntermittentCleanup.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", description="on disk")
+    target = seed.path
+    assert target is not None
+    original = target.read_bytes()
+
+    cleanup = media_services._cleanup_sidecar_temps
+    attempts = 0
+
+    def intermittent_cleanup(path: Path) -> int:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PermissionError("temporary cleanup error")
+        return cleanup(path)
+
+    monkeypatch.setattr(
+        media_services, "_cleanup_sidecar_temps", intermittent_cleanup
+    )
+    store = MediaSidecarStore(project)
+    try:
+        store.load()
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("Cleanup failure must propagate to caller")
+
+    assert store._loaded is False
+    assert store.get("asset").description == "on disk"
+    assert attempts == 2
+    assert target.read_bytes() == original
