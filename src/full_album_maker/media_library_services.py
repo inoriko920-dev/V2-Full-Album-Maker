@@ -216,9 +216,17 @@ def _read_sidecar_records(target: Path, version: int) -> dict[str, "SidecarRecor
         text = target.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {}
-    except (OSError, UnicodeError) as exc:
+    except UnicodeError as exc:
+        # Invalid text encoding is damaged content and needs quarantine.
         raise SidecarCorruptionError(
-            f"Sidecar metadata tidak dapat dibaca: {exc}"
+            f"Sidecar metadata bukan UTF-8 yang valid: {exc}"
+        ) from exc
+    except OSError as exc:
+        # A transient sharing violation, permission failure or disk I/O error
+        # does NOT prove file corruption. Never move a healthy sidecar out
+        # of its canonical location just because it cannot be read right now.
+        raise SidecarStoreError(
+            f"Sidecar metadata belum dapat dibaca; coba lagi: {exc}"
         ) from exc
     try:
         raw = json.loads(text)
@@ -355,6 +363,11 @@ class MediaSidecarStore:
     def has_pending_changes(self) -> bool:
         """True while a failed/deferred save still has metadata to publish."""
         return bool(self._dirty_records or self._pending_migrations)
+
+    @property
+    def is_loaded(self) -> bool:
+        """Whether the sidecar has been read successfully or fail-closed."""
+        return self._loaded
 
     def _quarantine_corrupt_store(
         self,
