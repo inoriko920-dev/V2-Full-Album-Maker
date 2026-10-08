@@ -298,3 +298,79 @@ def test_save_as_conflicting_new_id_only_never_overwrites_destination(
     media_feature._refresh_media(fake, reset=True)
     assert store.has_pending_changes
     assert external.path.read_bytes() == before
+
+
+def test_media_refresh_recovers_from_temporary_sidecar_read_error(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(media_feature.visual_mod, "images", lambda _project: [])
+    saved = tmp_path / "TemporarilyBlocked.json"
+    saved.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(saved)
+    seed.update("persisted-asset", description="preserved")
+    target = seed.path
+    assert target is not None
+    original = target.read_bytes()
+
+    fake = _fake(Project())
+    fake.project = Project()
+    fake._foundation_project_path = str(saved)
+    original_read = Path.read_text
+    attempts = 0
+
+    def read_with_one_sharing_violation(self, *args, **kwargs):
+        nonlocal attempts
+        if self == target:
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError("sidecar temporarily locked")
+        return original_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_with_one_sharing_violation)
+    media_feature._refresh_media(fake, reset=True)
+    assert fake._s03_store.is_loaded is False
+    assert fake._s03_store.quarantined_path is None
+    assert target.read_bytes() == original
+    assert len([m for m in fake.log.lines if "coba refresh" in m]) == 1
+
+    media_feature._refresh_media(fake, reset=False)
+    assert fake._s03_store.is_loaded is True
+    assert fake._s03_store.get("persisted-asset").description == "preserved"
+    assert fake._s03_sidecar_read_error_key is None
+    assert attempts == 2
+    assert target.read_bytes() == original
+
+
+def test_media_refresh_persistent_read_error_warns_once_and_stays_retryable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(media_feature.visual_mod, "images", lambda _project: [])
+    saved = tmp_path / "ReadBlocked.json"
+    saved.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(saved)
+    seed.update("asset", favorite=True)
+    target = seed.path
+    assert target is not None
+    before = target.read_bytes()
+
+    fake = _fake(Project())
+    fake.project = Project()
+    fake._foundation_project_path = str(saved)
+    original_read = Path.read_text
+
+    def read_denied(self, *args, **kwargs):
+        if self == target:
+            raise PermissionError("persistent sharing violation")
+        return original_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_denied)
+    media_feature._refresh_media(fake, reset=True)
+    media_feature._refresh_media(fake, reset=False)
+
+    assert fake._s03_store.is_loaded is False
+    assert len([m for m in fake.log.lines if "coba refresh" in m]) == 1
+    assert not fake._s03_store.persistence_blocked
+    assert fake._s03_store.quarantined_path is None
+    assert target.read_bytes() == before
