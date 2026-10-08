@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from full_album_maker import media_feature
 from full_album_maker.media_library_model import MediaLibraryIndex
-from full_album_maker.media_library_services import MediaSidecarStore
+from full_album_maker.media_library_services import MediaSidecarStore, SidecarRecord
 from full_album_maker.project import Project
 
 
@@ -230,3 +230,38 @@ def test_explicit_refresh_still_reloads_remote_metadata_without_pending_edits(
     media_feature._refresh_media(fake, reset=True)
     assert fake._s03_store is not old
     assert fake._s03_store.get("asset").description == "newer on disk"
+
+
+def test_save_as_sidecar_migration_collision_keeps_local_and_disk_records(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(media_feature.visual_mod, "images", lambda _project: [])
+    fake = _fake(Project())
+    store = fake._s03_store
+    store.set("old-id", SidecarRecord(tags=("source",)), persist=False)
+    store.migrate_asset_id("old-id", "new-id", persist=False)
+
+    dest = tmp_path / "Collision.json"
+    dest.write_text("{}", encoding="utf-8")
+    external = MediaSidecarStore(dest)
+    external.set("old-id", SidecarRecord(tags=("target-old",)))
+    external.set("new-id", SidecarRecord(tags=("target-new",)))
+    disk_before = external.path.read_bytes()
+
+    fake._foundation_project_path = str(dest)
+    media_feature._refresh_media(fake, reset=False)
+
+    assert fake._s03_store is store
+    assert store.project_path == dest
+    assert store.has_pending_changes
+    assert store.get("new-id").tags == ("source",)
+    assert external.path.read_bytes() == disk_before
+    assert any("belum dapat disimpan" in text for text in fake.log.lines)
+
+    # A second explicit refresh must not drop either side of this collision.
+    media_feature._refresh_media(fake, reset=True)
+    assert fake._s03_store is store
+    assert store.has_pending_changes
+    assert store.get("new-id").tags == ("source",)
+    assert external.path.read_bytes() == disk_before
