@@ -703,3 +703,120 @@ def test_refresh_after_same_field_conflict_allows_new_edit(
         MediaSidecarStore(project).get("asset-shared").description
         == "after-refresh"
     )
+
+
+def test_deferred_same_asset_independent_fields_merge_on_save(tmp_path: Path) -> None:
+    project = tmp_path / "DeferredSameAsset.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", description="baseline", tags=("initial",))
+
+    local = MediaSidecarStore(project)
+    remote = MediaSidecarStore(project)
+    assert local.get("asset").description == "baseline"
+    assert remote.get("asset").description == "baseline"
+
+    local.update("asset", tags=("pending",), persist=False)
+    remote.update("asset", description="remote newer")
+    assert local.save() is True
+
+    actual = MediaSidecarStore(project).get("asset")
+    assert actual.tags == ("pending",)
+    assert actual.description == "remote newer"
+
+
+def test_deferred_same_field_conflict_blocks_save_without_data_loss(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DeferredSameField.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", description="baseline", favorite=False)
+
+    local = MediaSidecarStore(project)
+    remote = MediaSidecarStore(project)
+    local.load()
+    remote.load()
+    local.update("asset", description="pending-local", persist=False)
+    remote.update("asset", description="remote-new", favorite=True)
+    target = local.path
+    assert target is not None
+    untouched_bytes = target.read_bytes()
+
+    try:
+        local.save()
+    except SidecarWriteConflict as exc:
+        assert "description" in str(exc)
+    else:
+        raise AssertionError("Deferred stale same-field save must fail closed")
+
+    assert target.read_bytes() == untouched_bytes
+    assert local.get("asset").description == "pending-local"
+    actual = MediaSidecarStore(project).get("asset")
+    assert actual.description == "remote-new"
+    assert actual.favorite is True
+
+
+def test_deferred_field_edits_accumulate_without_overwriting_remote_fields(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DeferredAccumulated.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", tags=("initial",), description="baseline")
+
+    local = MediaSidecarStore(project)
+    remote = MediaSidecarStore(project)
+    local.load()
+    remote.load()
+    local.update("asset", tags=("new",), persist=False)
+    local.update("asset", favorite=True, persist=False)
+    remote.update("asset", description="remote")
+    local.save()
+
+    actual = MediaSidecarStore(project).get("asset")
+    assert actual.tags == ("new",)
+    assert actual.favorite is True
+    assert actual.description == "remote"
+
+
+def test_deferred_same_value_concurrent_edit_is_idempotent(tmp_path: Path) -> None:
+    project = tmp_path / "DeferredIdempotent.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", description="baseline")
+    local = MediaSidecarStore(project)
+    remote = MediaSidecarStore(project)
+    local.load()
+    remote.load()
+
+    local.update("asset", description="same", persist=False)
+    remote.update("asset", description="same")
+    assert local.save() is True
+    assert MediaSidecarStore(project).get("asset").description == "same"
+
+
+def test_deferred_pending_conflict_blocks_unrelated_immediate_update(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "DeferredThenImmediate.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", description="baseline")
+
+    local = MediaSidecarStore(project)
+    remote = MediaSidecarStore(project)
+    local.load()
+    remote.load()
+    local.update("asset", description="deferred", persist=False)
+    remote.update("asset", description="remote")
+
+    try:
+        local.update("asset", favorite=True)
+    except SidecarWriteConflict:
+        pass
+    else:
+        raise AssertionError("Immediate write must not flush conflicting pending edit")
+
+    assert MediaSidecarStore(project).get("asset").favorite is False
+    assert MediaSidecarStore(project).get("asset").description == "remote"
