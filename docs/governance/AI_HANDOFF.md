@@ -288,3 +288,17 @@ The historic references above to Q5 being complete apply to the **published v2.0
 - **v2.0.1 Q4: PASS / FROZEN. v2.0.1 Q5: NOT STARTED. v2.0.1 stable: NOT PUBLISHED.**
 - Authoritative patch Q4 evidence: `docs/implementation/Q4_V2_0_1_EVIDENCE.md`; gate plan: `docs/release/V2_0_1_GATE_PLAN.md`.
 - Next gate: explicit v2.0.1 Q5 **without rebuild**. Download and verify the exact Q4 artifact; never substitute a new build, change the old v2.0.0 release, or use its hardcoded publication workflow.
+
+
+## October 8, 2026 — v2.0.1 maintenance release COMPLETED
+
+This supersedes the earlier v2.0.1 "Q5 NOT STARTED" handoff entries **for v2.0.1**. Historical v2.0.0 Q4/Q5 evidence remains unchanged.
+
+- **Q4 v2.0.1:** PASS / frozen on source SHA `35a8c195469d49d7f7938b31761ceb17c4c720e0`; run `37724287381`; artifact ID `11527152731`; exact ZIP SHA-256 `6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d` (189598786 bytes).
+- **Q5 v2.0.1:** PASS / PUBLISHED; run `37725395630`; control SHA `aea9fbfc8f1c4b184145e118836a61aac3b3beb0`; evidence artifact ID `11527089380`.
+- **Stable v2.0.1:** release ID `406399261`, published 2026-10-08 11:01:03 WIB; tag `v2.0.1` points to exact Q4 candidate `35a8c195469d49d7f7938b31761ceb17c4c720e0`.
+- Exact published `Full-Album-Maker-v2.0.1-Windows-Portable.zip` is byte-identical to Q4 and was re-downloaded; no rebuild in Q5.
+- Latest stable: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.1
+- Detailed authoritative publication proof: `docs/implementation/Q5_V2_0_1_EVIDENCE.md`.
+- Previous stable v2.0.0 was preserved, available for side-by-side rollback; old source `inoriko920-dev/Full-Album-Maker` remains unmodified.
+- **Next work:** only a new user-directed post-release maintenance or feature wave, with its own branch, CI and new semantic version if a changed binary is published.
