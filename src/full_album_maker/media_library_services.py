@@ -337,6 +337,9 @@ class MediaSidecarStore:
         self._records: dict[str, SidecarRecord] = {}
         self._loaded = False
         self._dirty_records: set[str] = set()
+        # For deferred update(), remember only fields the user actually edited.
+        # A full-record dirty overlay would silently erase concurrent edits.
+        self._pending_field_edits: dict[str, tuple[SidecarRecord, dict[str, object]]] = {}
         self._pending_migrations: list[tuple[str, str]] = []
         self.last_recovery_warning = ""
         self.quarantined_path: Path | None = None
@@ -482,12 +485,29 @@ class MediaSidecarStore:
             self._apply_one_migration(latest, old_id, new_id)
         for dirty_id in tuple(self._dirty_records):
             local = self._records.get(dirty_id)
-            if local is not None:
+            if local is None:
+                continue
+            pending = self._pending_field_edits.get(dirty_id)
+            if pending is None:
+                # set(), relink and Save As intentionally carry whole records.
                 latest[dirty_id] = local
+                continue
+            baseline, requested = pending
+            disk_current = latest.get(dirty_id, SidecarRecord())
+            _assert_no_same_field_conflict(
+                dirty_id, baseline, disk_current, requested
+            )
+            values = {
+                name: getattr(disk_current, name)
+                for name in _SIDECAR_RECORD_FIELDS
+            }
+            values.update(requested)
+            latest[dirty_id] = SidecarRecord(**values)
         return latest
 
     def _clear_local_pending(self) -> None:
         self._dirty_records.clear()
+        self._pending_field_edits.clear()
         self._pending_migrations.clear()
 
     def _commit_single_record(self, asset_id: str, record: SidecarRecord) -> None:
@@ -515,6 +535,8 @@ class MediaSidecarStore:
             self._commit_single_record(key, record)
             return
         self._records[key] = record
+        # set() means explicit full-record replacement, not a field edit.
+        self._pending_field_edits.pop(key, None)
         self._dirty_records.add(key)
 
     def update(
@@ -582,7 +604,13 @@ class MediaSidecarStore:
         values.update(requested)
         record = SidecarRecord(**values)
         self._records[key] = record
-        self._dirty_records.add(key)
+        if requested:
+            pending = self._pending_field_edits.get(key)
+            if pending is not None:
+                pending[1].update(requested)
+            elif key not in self._dirty_records:
+                self._pending_field_edits[key] = (current, dict(requested))
+            self._dirty_records.add(key)
         return record
 
     def migrate_asset_id(self, old_id: str, new_id: str, *, persist: bool = True) -> None:
@@ -618,6 +646,10 @@ class MediaSidecarStore:
             self._records[new_id] = old if destination is None else destination
             self._dirty_records.add(new_id)
         self._dirty_records.discard(old_id)
+        # Relink makes the destination a full-record carry; obsolete field
+        # deltas must never resurrect the old asset after migration.
+        self._pending_field_edits.pop(old_id, None)
+        self._pending_field_edits.pop(new_id, None)
         self._pending_migrations.append((old_id, new_id))
 
     def rebind_project_path(
@@ -651,7 +683,9 @@ class MediaSidecarStore:
 
         self._records = current_records
         self._loaded = True
+        # First Save / Save As carries a complete snapshot to a NEW path.
         self._dirty_records = set(current_records)
+        self._pending_field_edits.clear()
         self._pending_migrations = current_migrations
 
         if persist and self.path is not None:
