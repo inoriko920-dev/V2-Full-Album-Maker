@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from full_album_maker import __version__
+from full_album_maker import __version__ as CURRENT_VERSION
+
+# README stays on the actual published stable until Q5 promotes v2.0.4.
+PUBLISHED_STABLE = "2.0.3"
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,18 +51,18 @@ def _verify_exact_published_identity(readme: str, notes: str, evidence: str) -> 
     readme_commit = _table_code(readme, "Commit sumber rilis")
     notes_commit = _capture(
         notes,
-        rf"^- Tag: `v{re.escape(__version__)}`, targets exact Q4 source commit `([0-9a-f]{{40}})`\.$",
+        rf"^- Tag: `v{re.escape(PUBLISHED_STABLE)}`, targets exact Q4 source commit `([0-9a-f]{{40}})`\.$",
         "release notes Q4 commit",
     )
     assert re.fullmatch(r"[0-9a-f]{40}", q5_commit), "Invalid Q5 source commit"
     assert readme_commit == notes_commit == q5_commit, "Published tag commit does not match Q5"
-    assert _table_code(evidence, "Stable version and tag") == f"v{__version__}"
+    assert _table_code(evidence, "Stable version and tag") == f"v{PUBLISHED_STABLE}"
 
 
 def _release_documents() -> tuple[str, str, str]:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    notes = ROOT / f"docs/RELEASE_NOTES_v{__version__}.md"
-    evidence = ROOT / f"docs/implementation/Q5_V{__version__.replace('.', '_')}_EVIDENCE.md"
+    notes = ROOT / f"docs/RELEASE_NOTES_v{PUBLISHED_STABLE}.md"
+    evidence = ROOT / f"docs/implementation/Q5_V{PUBLISHED_STABLE.replace('.', '_')}_EVIDENCE.md"
     assert notes.is_file(), "Published version release notes are missing"
     assert evidence.is_file(), "Published version Q5 evidence is missing"
     return readme, notes.read_text(encoding="utf-8"), evidence.read_text(encoding="utf-8")
@@ -72,11 +75,11 @@ def test_readme_describes_current_stable_download_and_checksum() -> None:
     assert "published_asset_redownload_verified = true" in evidence
     assert "exact_zip_rebuilt = false" in evidence
 
-    filename = f"Full-Album-Maker-v{__version__}-Windows-Portable.zip"
-    assert f"Full Album Maker v{__version__}" in readme
-    assert f"releases/download/v{__version__}/{filename}" in readme
-    assert f"releases/download/v{__version__}/SHA256SUMS.txt" in readme
-    assert f"docs/RELEASE_NOTES_v{__version__}.md" in readme
+    filename = f"Full-Album-Maker-v{PUBLISHED_STABLE}-Windows-Portable.zip"
+    assert f"Full Album Maker v{PUBLISHED_STABLE}" in readme
+    assert f"releases/download/v{PUBLISHED_STABLE}/{filename}" in readme
+    assert f"releases/download/v{PUBLISHED_STABLE}/SHA256SUMS.txt" in readme
+    assert f"docs/RELEASE_NOTES_v{PUBLISHED_STABLE}.md" in readme
     _verify_exact_published_identity(readme, notes, evidence)
     assert "Repository asli" in readme
     assert "Source code asli belum sepenuhnya dipulihkan" not in readme
@@ -103,6 +106,19 @@ def test_wrong_release_commit_is_rejected() -> None:
     assert bad_readme != readme
     with pytest.raises(AssertionError, match="Published tag commit"):
         _verify_exact_published_identity(bad_readme, notes, evidence)
+
+
+
+def test_unpublished_candidate_does_not_replace_downloadable_stable() -> None:
+    assert CURRENT_VERSION == "2.0.4"
+    candidate = ROOT / "docs/RELEASE_NOTES_v2.0.4.md"
+    assert candidate.is_file()
+    text = candidate.read_text(encoding="utf-8")
+    assert "Status: **Release candidate — not published**" in text
+    assert "Q4 and Q5 pending" in text
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert f"releases/download/v{PUBLISHED_STABLE}/" in readme
+    assert "releases/download/v2.0.4/" not in readme
 
 
 def test_readme_preserves_historical_rescue_checksums() -> None:
