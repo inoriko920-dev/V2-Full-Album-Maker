@@ -65,3 +65,20 @@ Recommended settings:
 
 Tracking issue:
 - #1 — Post-release hardening: protect main branch
+
+
+## v2.0.1 stable immutable reference — October 8, 2026
+
+The maintenance release v2.0.1 has passed Q4 and Q5, and is now the latest stable:
+
+- tag: `v2.0.1`
+- exact candidate/tag commit: `35a8c195469d49d7f7938b31761ceb17c4c720e0`
+- exact Windows ZIP: `Full-Album-Maker-v2.0.1-Windows-Portable.zip`
+- exact portable ZIP bytes: `189598786`
+- portable ZIP SHA-256: `6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d`
+- Q4 Actions run: `37724287381`
+- Q5 Actions run: `37725395630`
+- Q5 GitHub Release: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.1
+- evidence: `docs/implementation/Q5_V2_0_1_EVIDENCE.md`.
+
+Both v2.0.0 and v2.0.1 are immutable releases. Preserve each tag, exact ZIP and checksum. v2.0.0 is now the previous stable rollback option; v1.5.0 remains older historical stable. Future changed binaries require new version numbers, new frozen Q4 evidence and Q5 no-rebuild publication.
