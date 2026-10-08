@@ -1,6 +1,6 @@
 # V2-Full-Album-Maker — v2.0.4 patch quality-gate plan
 
-Status: **P01 PASS; Q4 PASS/FROZEN; Q5 NOT STARTED; v2.0.4 NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS/FROZEN; Q5 PASS/PUBLISHED — STABLE v2.0.4**
 
 ## Repository and source fence
 
@@ -46,7 +46,7 @@ No UI redesign, project/schema migration, new dependency, FFmpeg/font pin change
 
 **Hard stop:** any post-freeze executable or build change invalidates the Q4 candidate and requires new Q4 evidence.
 
-## Q5 — No-rebuild stable publication (blocked until Q4 PASS)
+## Q5 — No-rebuild stable publication (executed; PASS)
 
 1. Independently verify Q4 full status and protected-main state; v2.0.4 tag/release must not already exist.
 2. Create a separate `.github/workflows/v2-q5-v2.0.4-release.yml` anchored to actual Q4 SHA/run/artifact/hash/bytes, on a dedicated `release/q5-v2.0.4` branch.
@@ -67,7 +67,7 @@ No UI redesign, project/schema migration, new dependency, FFmpeg/font pin change
 | PR #52 protected-main | **PASS** | 37743973995, SHA `224be664195065a83120bc7b6a917b76e850961a` |
 | v2.0.4 P01 branch | **PASS/MERGED** | PR #53, 782 tests run 37744463640, post-merge main 37745055766 PASS |
 | v2.0.4 Q4 artifact | **PASS/FROZEN** | SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, run 37745568166, artifact 11536240883, 189599237 bytes, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b` |
-| v2.0.4 Q5 published | NOT STARTED | No tag/release is authorized yet |
+| v2.0.4 Q5 published | **PASS/PUBLISHED** | Run 37747917087, release ID 406580160, frozen tag SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, no-rebuild and published asset re-download PASS |
 
 ## Handoff
 
@@ -87,3 +87,21 @@ This supersedes the earlier Q4-NOT-STARTED planning language while retaining the
 - Verify Q4 post-merge protected-main run **`37746119351`** PASS before starting Q5. It was pending when Q4 evidence was first authored.
 - Exact source-of-truth: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`.
 - Q5 is **NOT STARTED**; do not publish/rebuild/retag v2.0.4, or modify v2.0.3 and earlier stable assets.
+
+
+## Verified Q5 publication — October 8, 2026
+
+This final section **supersedes** the earlier Q5-NOT-STARTED planning status and preserves the original hard-gate requirements above.
+
+- Prerequisite protected-main CI runs `37746119351` and `37746897742`: both **PASS**, following Q4 PR #54 and evidence PR #55 merges.
+- Q5 control branch was created from the exact frozen Q4 SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, not a later squash-merge SHA. Only `.github/workflows/v2-q5-v2.0.4-release.yml` was added relative to this frozen source.
+- Q5 run `37747917087` on control SHA `1e41dcf974d3302ae835b8efd3195d420de0c552` finished **completed/success**.
+- Q5 passed provenance/no-rebuild, unused tag and release, existing v2.0.3 rollback, exact Q4 artifact download and checksum, embedded manifest/font/FFmpeg provenance, secret scan, isolated offline A/V smoke, publication, and post-publication asset re-download verification.
+- Published **stable v2.0.4** on GitHub release ID `406580160`, at `2026-10-08 15:09:44 WIB`.
+- Exact published tag points to **Q4 source SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`**.
+- Published **unchanged Q4 ZIP** `Full-Album-Maker-v2.0.4-Windows-Portable.zip`, **189599237 bytes**, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`.
+- Q5 evidence artifact ID `11536193084`, name `q5-release-evidence`.
+- Independent sources: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`, `docs/implementation/Q5_V2_0_4_EVIDENCE.md`, `docs/RELEASE_NOTES_v2.0.4.md`, https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.4.
+- Historical v2.0.3 and earlier stable assets unchanged; original `inoriko920-dev/Full-Album-Maker` unchanged.
+
+**Q4 PASS, Q5 PASS, stable v2.0.4 PUBLISHED. New binary changes require a new version and a new Q4/Q5 cycle.**
