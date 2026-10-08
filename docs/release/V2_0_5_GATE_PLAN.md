@@ -1,6 +1,6 @@
 # P01 v2.0.5 — patch candidate release quality plan (ASTRA → SOL)
 
-Status: **P01 PASS; Q4 PASS/FROZEN; Q5 NOT STARTED; v2.0.5 NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS/FROZEN; Q5 PASS/PUBLISHED — STABLE v2.0.5**
 
 Documentation authored **8 October 2026 WIB**. The associated DOCX is the planning handoff; this Markdown is the machine-auditable source of truth.
 
@@ -95,3 +95,20 @@ This execution section supersedes the **earlier planning-only/NOT STARTED claims
 - Independent protected-main CI after PR #60: run `37755534261`, **PENDING VERIFICATION** at the time this evidence was authored. Do not begin Q5 until SUCCESS and this evidence documentation PR + its postmerge CI also PASS.
 - Primary evidence: `docs/implementation/Q4_V2_0_5_EVIDENCE.md`.
 - **Q5 NOT STARTED, v2.0.5 NOT PUBLISHED.** Stable v2.0.4 remains the only latest downloadable ZIP until new Q5 no-rebuild publication is verified.
+
+
+## Verified Q5 publication — October 8, 2026
+
+This final section supersedes the earlier Q5-NOT-STARTED planning language while preserving the original quality gates and source history.
+
+- Q4 workflow on exact candidate SHA `645fa166aa7a4cdc372b80c82db09026a7ab9b95`: run `37754857699` PASS. Frozen inner Windows ZIP `Full-Album-Maker-v2.0.5-Windows-Portable.zip`, **189598540 bytes**, SHA-256 `8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`, Actions artifact **ID `11540026862`**.
+- Independent protected-main Q4 CI run `37755534261` PASS, evidence PR #61 exact-head run `37755797199` PASS, evidence post-merge protected-main run `37756315130` PASS.
+- Version-specific Q5 control branch created directly from frozen Q4 SHA, with **only** `.github/workflows/v2-q5-v2.0.5-release.yml` added. Q5 control SHA `d7ed9f2191484fbd8a2e66f726b53634c5a9a482` is NOT the frozen release tag SHA.
+- Independent Q5 Windows run `37756942493` **completed/success**: no-rebuild source fence, absent new tag/release, v2.0.4 rollback, Q4 artifact retrieval by exact ID, inner ZIP checksum/bytes, embedded manifest/provenance, secret scan and offline extracted audio/video smoke **PASS**.
+- GitHub published `v2.0.5` stable release **ID `406656131`** at **2026-10-08 16:29:52 WIB**, `draft=false`, `prerelease=false`. Published tag points directly to frozen Q4 SHA `645fa166aa7a4cdc372b80c82db09026a7ab9b95`.
+- Q5 re-downloaded published ZIP and `SHA256SUMS.txt` and independently checked names, source commit, bytes and SHA-256; **PASS**.
+- Q5 uploaded evidence artifact **ID `11540114007`**, name `q5-release-evidence`. Workflow summary `exact_zip_rebuilt=false`, `publication_performed=true`, `published_asset_redownload_verified=true`.
+- Source-of-truth final evidence `docs/implementation/Q5_V2_0_5_EVIDENCE.md` and verified stable notes `docs/RELEASE_NOTES_v2.0.5.md`.
+- v2.0.4 and all earlier tags/assets unchanged; original `inoriko920-dev/Full-Album-Maker` repository unchanged. New executable work requires next version and fresh P01/Q4/Q5 gates.
+
+**Q4 PASS, Q5 PASS, STABLE v2.0.5 PUBLISHED. No published ZIP, checksum or tag may be replaced.**
