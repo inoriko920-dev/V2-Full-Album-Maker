@@ -432,20 +432,25 @@ class MediaSidecarStore:
     def load(self) -> dict[str, SidecarRecord]:
         if self._loaded:
             return dict(self._records)
-        self._loaded = True
         target = self.path
         if target is None:
+            self._loaded = True
             return {}
+        # Do not publish the loaded flag until the cross-process lock, orphan
+        # cleanup and disk read have all completed. A temporary lock timeout
+        # must stay retryable rather than masquerade as an empty library.
         with _sidecar_file_lock(target):
             _cleanup_sidecar_temps(target)
             try:
-                self._records = _read_sidecar_records(target, self.VERSION)
+                records = _read_sidecar_records(target, self.VERSION)
             except SidecarUnsupportedVersion as exc:
                 self._unsupported_version(target, exc)
-                self._records = {}
+                records = {}
             except SidecarCorruptionError as exc:
                 self._quarantine_corrupt_store(target, exc)
-                self._records = {}
+                records = {}
+        self._records = records
+        self._loaded = True
         self._clear_local_pending()
         return dict(self._records)
 
