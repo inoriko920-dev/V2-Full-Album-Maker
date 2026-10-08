@@ -22,16 +22,27 @@ def test_stable_version_is_consistent_across_package_metadata():
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     parts = __version__.split(".")
     assert len(parts) == 3 and all(part.isdigit() for part in parts)
-    assert __version__ == MANIFEST["target_stable_version"] == "2.0.0"
+    assert __version__ == MANIFEST["target_stable_version"]
     assert pyproject["project"]["version"] == __version__
     notes = ROOT / f"docs/RELEASE_NOTES_v{__version__}.md"
     assert notes.exists()
     text = notes.read_text(encoding="utf-8")
-    assert "Status: **Stable" in text
-    assert "Q5 Release Quality Gate PASS" in text
-    assert "Full-Album-Maker-v2.0.0-Windows-Portable.zip" in text
-    assert "4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad" in text
-    assert "d2ce2ccac62cdcd8994a38251a5b547c8460421e" in text
+    assert f"Full-Album-Maker-v{__version__}-Windows-Portable.zip" in text
+    # Candidate metadata must not masquerade as an already published stable.
+    if __version__ == "2.0.1":
+        assert "Status: **Release candidate — not published**" in text
+        assert "Q4 and Q5 pending" in text
+    else:
+        assert "Status: **Stable" in text
+
+
+def test_published_v200_identity_remains_immutable_while_preparing_patch():
+    notes = (ROOT / "docs/RELEASE_NOTES_v2.0.0.md").read_text(encoding="utf-8")
+    assert "Status: **Stable" in notes
+    assert "Q5 Release Quality Gate PASS" in notes
+    assert "Full-Album-Maker-v2.0.0-Windows-Portable.zip" in notes
+    assert "4c0f2205a0a0a77d3da819ca11e4a6e57298f2003a20f132533a1b29760280ad" in notes
+    assert "d2ce2ccac62cdcd8994a38251a5b547c8460421e" in notes
 
 
 def test_window_title_exposes_stable_version():
