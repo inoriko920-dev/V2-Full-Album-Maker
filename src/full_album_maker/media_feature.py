@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from . import async_import as async_mod, visual_feature as visual_mod
 from .media_library_model import MediaAddToAlbumCommand, MediaLibraryIndex, MediaType, stable_asset_id
-from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, SidecarWriteConflict, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
+from .media_library_services import MediaSidecarStore, SidecarMigrationConflict, SidecarWriteConflict, SidecarStoreError, build_project_assets, canonical_path_key, media_type_for_path, scan_folder
 from .media_workspace import MediaContextWidget, MediaInspectorWidget, MediaTimelinePreviewCanvas, MediaWorkspace
 
 _installed=False; _originals:dict[str,Any]={}
@@ -55,7 +55,6 @@ def _refresh_media(self,reset=False):
     if project_changed:
         self._s03_project=self.project
         self._s03_store=MediaSidecarStore(self._foundation_project_path or None)
-        self._s03_store.load()
     elif path_changed:
         # Same in-memory project gaining/changing its canonical path means
         # First Save / Save As, not Open Project. Carry media metadata to the
@@ -95,7 +94,26 @@ def _refresh_media(self,reset=False):
         # Only discard/reload the store when no local changes are pending.
         # Unsaved projects keep their in-memory metadata.
         self._s03_store=MediaSidecarStore(self._foundation_project_path)
-        self._s03_store.load()
+    # An unreadable sidecar is not corrupt. Keep the project accessible and
+    # allow the next refresh to retry, but never pretend metadata was loaded.
+    if not self._s03_store.is_loaded:
+        try:
+            self._s03_store.load()
+        except SidecarStoreError as exc:
+            warning_key=(str(self._s03_store.path or ''),str(exc))
+            if warning_key!=getattr(self,'_s03_sidecar_read_error_key',None):
+                self._s03_sidecar_read_error_key=warning_key
+                self.log.appendPlainText(
+                    f'Metadata Media tidak dapat dibaca sementara; coba refresh: {exc}'
+                )
+            if hasattr(self,'foundation_state'):
+                self.foundation_state.set_status(
+                    save=('Metadata media belum dapat dibaca','warning')
+                )
+        else:
+            self._s03_sidecar_read_error_key=None
+    else:
+        self._s03_sidecar_read_error_key=None
     self._s03_project=self.project
     sidecar_warning=str(getattr(self._s03_store,'last_recovery_warning','') or '')
     sidecar_warning_key=(str(getattr(self._s03_store,'path',None) or ''),sidecar_warning)
@@ -104,7 +122,7 @@ def _refresh_media(self,reset=False):
         self.log.appendPlainText('Metadata Media: '+sidecar_warning)
         if hasattr(self,'foundation_state'):
             self.foundation_state.set_status(save=('Metadata media perlu perhatian','warning'))
-    self._s03_index.replace_all(build_project_assets(self.project,visual_mod.images(self.project),self._s03_store)); self.media_workspace.set_index(self._s03_index); self.media_context.set_counts(self._s03_index.counts()); cc={}
+    self._s03_index.replace_all(build_project_assets(self.project,visual_mod.images(self.project),self._s03_store if self._s03_store.is_loaded else None)); self.media_workspace.set_index(self._s03_index); self.media_context.set_counts(self._s03_index.counts()); cc={}
     for asset in self._s03_index.all():
         for name in asset.collections: cc[name]=cc.get(name,0)+1
     self.media_context.set_collection_counts(cc); self.media_timeline_canvas.set_project(self.project); enabled=bool(self._foundation_project_open) and not self._s03_jobs; self.media_workspace.import_file.setEnabled(enabled); self.media_workspace.import_folder.setEnabled(enabled); self._s03_select(tuple(self.media_workspace.selection.selected_ids))
