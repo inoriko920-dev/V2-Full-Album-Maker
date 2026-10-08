@@ -220,3 +220,17 @@ Stable release:
 - prior STEP planning summaries/integrity files.
 - `docs/governance/PROJECT_GOVERNANCE.md`
 - `docs/governance/AI_HANDOFF.md`
+
+
+## October 8, 2026 — v2.0.1 patch maintenance (newer than historic v2.0.0 Q5)
+
+The historic references above to Q5 being complete apply to the **published v2.0.0 release only**. The current maintenance patch is separate:
+
+- v2.0.1 candidate preparation PR #32: merged, main Windows validation PASS (run `37724111066`).
+- v2.0.1 Q4 Windows artifact workflow PR #33: merged, exact Q4 run `37724287381` PASS (760 regressions plus separate pinned FFmpeg capability test).
+- Exact frozen candidate commit: `35a8c195469d49d7f7938b31761ceb17c4c720e0` (not the later squash-merge SHA).
+- Q4 Actions artifact ID: `11527152731` (name `q4-v2.0.1-windows-artifact-candidate`).
+- Exact portable ZIP: `Full-Album-Maker-v2.0.1-Windows-Portable.zip`; 189598786 bytes; SHA-256 `6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d`.
+- **v2.0.1 Q4: PASS / FROZEN. v2.0.1 Q5: NOT STARTED. v2.0.1 stable: NOT PUBLISHED.**
+- Authoritative patch Q4 evidence: `docs/implementation/Q4_V2_0_1_EVIDENCE.md`; gate plan: `docs/release/V2_0_1_GATE_PLAN.md`.
+- Next gate: explicit v2.0.1 Q5 **without rebuild**. Download and verify the exact Q4 artifact; never substitute a new build, change the old v2.0.0 release, or use its hardcoded publication workflow.
