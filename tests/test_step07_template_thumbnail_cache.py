@@ -70,7 +70,7 @@ def test_failed_key_is_memoized_but_changed_draft_gets_new_attempt(tmp_path: Pat
         cache.close()
 
 
-def test_close_suppresses_pending_thumbnail_delivery(tmp_path: Path) -> None:
+def test_close_suppresses_pending_thumbnail_delivery(tmp_path: Path, qapp) -> None:
     document = ProjectDocument.new_empty("Close Fixture")
     descriptor = builtin_descriptors()[0]
     draft = TemplateStudioDraft(template_id=descriptor.template_id)
@@ -95,5 +95,48 @@ def test_close_suppresses_pending_thumbnail_delivery(tmp_path: Path) -> None:
     cache.close()
     release.set()
     assert cache.wait_for_idle(timeout=3.0) is True
+    # Deliver queued Qt signals; without event processing the old bug was
+    # hidden and the test could pass despite late worker callbacks.
+    qapp.processEvents()
 
     assert delivered == []
+
+
+def test_closed_thumbnail_cache_rejects_cache_hits_and_new_work(
+    tmp_path: Path, qapp
+) -> None:
+    document = ProjectDocument.new_empty("Close Request Fixture")
+    descriptor = builtin_descriptors()[0]
+    existing = TemplateStudioDraft(template_id=descriptor.template_id, overlay_opacity=0.60)
+    fresh = TemplateStudioDraft(template_id=descriptor.template_id, overlay_opacity=0.40)
+    called: list[str] = []
+    delivered: list[tuple[str, str, str]] = []
+
+    def renderer(_document, item, _draft, _custom, destination: Path) -> str:
+        called.append(item.template_id)
+        destination.write_bytes(b"png-fixture")
+        return str(destination)
+
+    cache = TemplateThumbnailCache(tmp_path / "cache", renderer=renderer, max_workers=1)
+    try:
+        assert cache.request(document, descriptor, existing) is None
+        assert cache.wait_for_idle(timeout=3.0)
+        qapp.processEvents()
+        existing_path = cache.path_for_key(thumbnail_cache_key(document, descriptor, existing))
+        assert existing_path.is_file()
+        assert len(called) == 1
+
+        cache.thumbnail_ready.connect(
+            lambda template_id, path, status: delivered.append((template_id, path, status))
+        )
+        cache.close()
+        # Cache hits must not emit UI callbacks after close, and a new key
+        # must not submit to the executor that has already shut down.
+        assert cache.request(document, descriptor, existing) is None
+        assert cache.request(document, descriptor, fresh) is None
+        qapp.processEvents()
+        assert delivered == []
+        assert called == [descriptor.template_id]
+        assert existing_path.read_bytes() == b"png-fixture"
+    finally:
+        cache.close()
