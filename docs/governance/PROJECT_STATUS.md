@@ -333,3 +333,20 @@ This supersedes the earlier v2.0.3-as-current-maintenance sections for **source 
 - Independent protected-main CI after PR #54: run `37746119351`, **must be verified PASS before Q5**.
 - Q4 primary evidence: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`. Gate plan: `docs/release/V2_0_4_GATE_PLAN.md`.
 - **Next step:** after successful Q4 postmerge main CI and evidence-doc PR validation, create isolated v2.0.4 Q5 publication workflow that downloads and verifies this exact frozen Q4 artifact **without rebuild**. Do not publish/tag/replace previous releases based on ordinary `main` validation.
+
+## October 8, 2026 — v2.0.4 STABLE / PUBLISHED (latest)
+
+This **supersedes** previous v2.0.4 Q4-only, Q5-pending and v2.0.3-as-latest sections while preserving their historical evidence.
+
+- **Current status:** Full Album Maker v2.0.4 stable published, all P01/Q4/Q5 release gates **PASS**. Project returns to **post-release maintenance**.
+- P01 v2.0.4 preparation PR #53 merged and verified (782 tests, protected-main run `37745055766` PASS).
+- Q4 PR #54 exact Windows run `37745568166` PASS (782 regressions + 1 pinned FFmpeg external-filter test + extracted offline portable audio/video smoke), artifact **ID `11536240883`**. Q4 PR and postmerge main CI PASS; Q4 evidence PR #55 and postmerge `37746897742` PASS.
+- **Immutable Q4 source commit:** `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, not the Q4/README/evidence squash merge SHA.
+- **Q5 no-rebuild release run:** `37747917087`, exact Q5 control SHA `1e41dcf974d3302ae835b8efd3195d420de0c552`, all steps PASS (provenance, actual Q4 artifact download/verification, isolated offline A/V smoke, embedded metadata, secret scan, published asset re-download).
+- **GitHub Release v2.0.4:** https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.4; **release ID `406580160`**, published **2026-10-08 15:09:44 WIB**, `draft=false`, `prerelease=false`.
+- Tag `v2.0.4` points directly to frozen Q4 source `af5af1ce24aba17ff68d469390a0c3d21f80f44d`.
+- Stable portable ZIP `Full-Album-Maker-v2.0.4-Windows-Portable.zip`, **189599237 bytes**, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`. Published ZIP was re-downloaded by Q5 and independently verified.
+- Q5 evidence artifact ID `11536193084`, name `q5-release-evidence`. **No ZIP rebuild/repack** occurred.
+- Source of truth: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`, `docs/implementation/Q5_V2_0_4_EVIDENCE.md`, `docs/RELEASE_NOTES_v2.0.4.md` and `docs/release/V2_0_4_GATE_PLAN.md`.
+- Previously published v2.0.3, v2.0.2, v2.0.1 and v2.0.0 stable tags/assets/checksums unchanged; original `inoriko920-dev/Full-Album-Maker` repo never modified.
+- **Next:** verify protected-main Windows CI after post-release documentation PR. Future executable changes require a new version and separate fresh Q4/Q5. Do not overwrite v2.0.4 or older ZIPs/tags.
