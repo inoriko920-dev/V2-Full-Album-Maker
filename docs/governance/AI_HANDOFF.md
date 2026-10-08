@@ -392,3 +392,16 @@ This supersedes the prior Q4-only v2.0.4 handoff. No v2.0.4 release gate remains
 - Full evidence: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`, `docs/implementation/Q5_V2_0_4_EVIDENCE.md`, `docs/RELEASE_NOTES_v2.0.4.md`. Executed workflow source archived at `.github/workflows/v2-q5-v2.0.4-release.yml`.
 - The released v2.0.4 ZIP is immutable. Published v2.0.3 and older releases and the original `inoriko920-dev/Full-Album-Maker` are untouched.
 - Next work should be **post-release maintenance only**. Do not claim another executable improvement is in v2.0.4 unless it is actually in frozen Q4 source. Always branch/PR, test Windows, and issue a *new* version for changed binaries.
+
+## October 8, 2026 — v2.0.5 Q4 frozen, Q5 blocked pending independent CI
+
+Read `docs/implementation/Q4_V2_0_5_EVIDENCE.md` and `docs/release/V2_0_5_GATE_PLAN.md` first. The current **source** candidate is v2.0.5, but the latest published and downloadable stable remains **v2.0.4**.
+
+- Immutable Q4 candidate/build source SHA: `645fa166aa7a4cdc372b80c82db09026a7ab9b95`; Q4 Windows run **37754857699** and job **113236788584**: **791 tests + pinned FFmpeg external filter test + isolated extracted portable audio/video smoke PASS**.
+- Q4 artifact **ID 11540026862**, name `q4-v2.0.5-windows-artifact-candidate`, attached to the exact successful Q4 run. Do not confuse the artifact wrapper (189251417 bytes, SHA-256 `c2e76c52e48a23773e342fc9e2528a218ad66c2aa3a52a1eae6249be0ee7c078`) with the **inner ZIP**.
+- Exact **inner ZIP**: `Full-Album-Maker-v2.0.5-Windows-Portable.zip`, **189598540 bytes**, SHA-256 **`8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`**.
+- PR #60 generic Windows CI **37754885928 PASS**, merged to `main` as `5b3e4af92ece9b7e36e3209ac8207b802a31df6b`. **Merge SHA is NOT frozen Q4 SHA**.
+- Protected-main run **37755534261** for the Q4 merge must complete SUCCESS independently, as must the Q4 evidence PR and its subsequent protected-main CI, **before Q5 starts**.
+- Q5 source/workflow must branch **directly from frozen Q4 SHA**; download the exact Actions wrapper ID, extract and verify unchanged inner ZIP bytes/hash and bundled manifest, rerun isolated smoke, publish that same ZIP **without rebuild/repack/recompression**, tag pointing to exact Q4 source SHA, and re-download/check published assets.
+- Preserve v2.0.4 stable release and all earlier tags/ZIPs/checksums. The original `inoriko920-dev/Full-Album-Maker` repo must remain read-only.
+- **Q5 NOT STARTED; v2.0.5 NOT PUBLISHED.** Never claim otherwise until official Q5 publication and independent verification have both passed.
