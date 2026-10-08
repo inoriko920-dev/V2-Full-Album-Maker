@@ -95,3 +95,16 @@ The latest published stable version is now **v2.0.2**:
 - Full evidence `docs/implementation/Q5_V2_0_2_EVIDENCE.md`.
 
 Published stable v2.0.2, v2.0.1, v2.0.0 and v1.5.0 tags, release assets and checksums are all immutable. Do not move tags, replace ZIPs or re-run historical controls to overwrite an existing release. Future executable changes require a new semantic version and entirely new Q4/Q5 evidence.
+
+
+## v2.0.3 latest stable — immutable record (October 8, 2026)
+
+- tag: `v2.0.3`, exact Q4 candidate SHA: `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d`.
+- exact Windows portable: `Full-Album-Maker-v2.0.3-Windows-Portable.zip`.
+- exact ZIP byte count: `189599847`.
+- exact ZIP SHA-256: `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0`.
+- Q4 Actions run `37736530557`, Q5 Actions run `37737839379`, release ID `406491420`.
+- https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.3
+- full Q5 evidence: `docs/implementation/Q5_V2_0_3_EVIDENCE.md`.
+
+Published stable versions v2.0.3, v2.0.2, v2.0.1, v2.0.0 and v1.5.0 remain immutable. Never move tags, replace published ZIPs/checksums or rerun historical controls to change old releases. Changed binaries require a new version, new frozen Q4 evidence and new Q5 no-rebuild publication.
