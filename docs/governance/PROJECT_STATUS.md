@@ -268,3 +268,19 @@ This supersedes older "v2.0.2 Q4 not started" statements. `v2.0.1` remains the l
 - CI after PR #41 merge: `37732736075`, must be checked before Q5 execution.
 - **Q4: PASS/FROZEN. Q5: NOT STARTED. Stable v2.0.2: NOT PUBLISHED.** Current published stable is v2.0.1.
 - Next: verify post-merge `main` CI, build v2.0.2 Q5-specific no-rebuild control, download/verify **this exact** frozen Q4 artifact, run offline smoke, publish only after Q5 gate PASS, re-download published ZIP and validate checksum/tag.
+
+
+## October 8, 2026 — latest stable v2.0.2 PUBLISHED
+
+Earlier v2.0.2 Q4-only sections are historical; the **current release gate is COMPLETE**:
+
+- P01 source/package identity: PASS (#40).
+- Q4 Windows portable build, regression and artifact freeze: PASS (#41), Actions `37732261424`, artifact `11530243260`.
+- Q5 no-rebuild publication: PASS, Actions `37733519371`, Q5 evidence artifact `11530643844`.
+- Stable tag `v2.0.2` -> exact Q4 candidate `2678b9f93364334c7eaf9ebad9ef7e079533716f`.
+- Release ID `406458763`, published 2026-10-08 **12:40:50 WIB**.
+- Windows portable `Full-Album-Maker-v2.0.2-Windows-Portable.zip`, `189599767` bytes, SHA-256 `701e0b68de17ec30ad17620d5cb5ef47e29bb28ca36ad0c95e5c242757c70c64`.
+- Published assets re-downloaded and verified, exact Q4 ZIP reused with **no rebuild**.
+- Evidence: `docs/implementation/Q4_V2_0_2_EVIDENCE.md` and `docs/implementation/Q5_V2_0_2_EVIDENCE.md`.
+- v2.0.1 and v2.0.0 preserved for rollback; original source repo read-only and unchanged.
+- **Phase:** Stable v2.0.2 / post-release maintenance. No Q4/Q5 work remains pending for this version.

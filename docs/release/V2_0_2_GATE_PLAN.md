@@ -1,6 +1,6 @@
 # v2.0.2 patch release — governed release plan and handoff
 
-Status: **P01 PASS, Q4 PASS/FROZEN — Q5 NOT STARTED, NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS; Q5 PASS — STABLE v2.0.2 PUBLISHED**
 
 ## Source of truth
 
@@ -49,6 +49,10 @@ Read `docs/governance/AI_HANDOFF.md`, `docs/governance/PROJECT_STATUS.md`, `docs
 
 **Q4 evidence:** PR #41 merged; Windows Q4 run `37732261424` PASS on frozen candidate source SHA `2678b9f93364334c7eaf9ebad9ef7e079533716f`. Artifact ID `11530243260`, exact portable ZIP `Full-Album-Maker-v2.0.2-Windows-Portable.zip`, `189599767` bytes, SHA-256 `701e0b68de17ec30ad17620d5cb5ef47e29bb28ca36ad0c95e5c242757c70c64`. Complete evidence `docs/implementation/Q4_V2_0_2_EVIDENCE.md`.
 
-**Main after PR #41:** Windows run `37732736075` needs independent success check before Q5 release execution.
+**Main after PR #41:** Windows run `37732736075` PASS on merge commit `6cb54bc2e640113791d8e39da9d727a30f343926`.
 
-**Next permitted work:** dedicated v2.0.2 Q5 workflow locked to the frozen Q4 artifact; never rebuild for Q5. Do not claim stable until Q5 completes and published assets are re-downloaded and verified.
+**Q5 result:** PASS on Actions run `37733519371` with control commit `46b4970bc342a267bab36231aafcd323c0a073bc`. Exact frozen Q4 ZIP `Full-Album-Maker-v2.0.2-Windows-Portable.zip`, `189599767` bytes, SHA-256 `701e0b68de17ec30ad17620d5cb5ef47e29bb28ca36ad0c95e5c242757c70c64`, was published **without rebuilding**. Published assets were re-downloaded and verified. Stable tag `v2.0.2` targets exact Q4 SHA `2678b9f93364334c7eaf9ebad9ef7e079533716f`. Release ID `406458763`, published October 8, 2026 12:40:50 WIB.
+
+**Source of truth:** `docs/implementation/Q5_V2_0_2_EVIDENCE.md`.
+
+**Next work:** protected stable v2.0.2 post-release maintenance; do not move tags, replace published ZIPs/checksums, or change historical Q4/Q5 controls. Future changed binaries need a new version and new Q4/Q5 gates.
