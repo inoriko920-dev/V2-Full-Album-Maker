@@ -1,6 +1,6 @@
 # V2-Full-Album-Maker — v2.0.3 patch candidate release gate plan
 
-Status: **P01 PASS; Q4 PASS / FROZEN; Q5 NOT STARTED — NOT PUBLISHED**
+Status: **P01 PASS; Q4 PASS; Q5 PASS — STABLE v2.0.3 PUBLISHED**
 
 ## Fixed source scope
 
@@ -29,7 +29,7 @@ The only executable change relative to v2.0.2 is the post-release **PR #45** pre
 - Record Q4 exact candidate SHA, run/job IDs, Actions artifact ID/name, **inner portable ZIP** exact byte count and SHA-256 in a dedicated immutable evidence document.
 - Freeze the full tuple. A later squash-merge SHA is *not* the candidate SHA. Any code/build change after freeze requires a fresh Q4 run.
 
-## Q5 — No-rebuild publication (NEXT — NOT STARTED)
+## Q5 — No-rebuild publication (COMPLETE / PASS)
 
 - Add an isolated v2.0.3 release workflow from the frozen Q4 commit; **never edit or re-run** historical publication controls to create a new release.
 - Verify v2.0.3 tag/release unused, v2.0.2 stable exists for rollback, and frozen Q4 run/commit/artifact provenance matches.
@@ -58,4 +58,10 @@ Check current PR head SHA and all CI outcomes; **do not trust earlier "PASS" cla
 
 **Q4 result:** PR #47 merged. Exact Q4 candidate/source SHA `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d`; Windows Q4 run `37736530557` PASS (775 regression tests and separate FFmpeg test), artifact ID `11531549824`. Frozen inner ZIP `Full-Album-Maker-v2.0.3-Windows-Portable.zip`, `189599847` bytes, SHA-256 `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0`. Evidence: `docs/implementation/Q4_V2_0_3_EVIDENCE.md`. Protected-main Windows CI after PR #47: run `37737069774`, must independently PASS before Q5.
 
-**Next step:** independent Q5 v2.0.3 no-rebuild gate, only after above CI prerequisites PASS. No publication until Q5 and release asset re-download pass.
+**Post-Q4 main CI:** run `37737069774` PASS on `14545877cade0e0f7629411cc8a67f862b8211be`. Q4 evidence documentation PR #48 exact-head CI `37737247516` PASS and merged.
+
+**Q5 outcome:** PASS on run `37737839379`. Tag `v2.0.3` points to the frozen Q4 source `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d` (not the Q5 control SHA `28fcc614630bac1ca6ffbb88ee527869bf5a775e`). Release ID `406491420`, published **2026-10-08 13:29:47 WIB**. Exact `Full-Album-Maker-v2.0.3-Windows-Portable.zip` from Q4 (189599847 bytes, SHA-256 `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0`) was published without rebuilding and subsequently downloaded again and verified. The prior v2.0.2 release remained unchanged.
+
+**Q5 evidence:** `docs/implementation/Q5_V2_0_3_EVIDENCE.md`.
+
+**Next authorized work:** post-release maintenance only, with new branch/CI and a *new* patch number for a changed executable. Never overwrite existing v2.0.3 tag, ZIP or checksum.
