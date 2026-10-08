@@ -351,6 +351,11 @@ class MediaSidecarStore:
             return None
         return self.project_path.with_suffix(self.project_path.suffix + ".media.json")
 
+    @property
+    def has_pending_changes(self) -> bool:
+        """True while a failed/deferred save still has metadata to publish."""
+        return bool(self._dirty_records or self._pending_migrations)
+
     def _quarantine_corrupt_store(
         self,
         target: Path,
