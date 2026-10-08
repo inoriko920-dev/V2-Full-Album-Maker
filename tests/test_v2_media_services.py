@@ -239,6 +239,51 @@ def test_real_ffmpeg_media_probe_service_audio_duration(tmp_path: Path) -> None:
     assert result.fingerprint.tier == "F2"
 
 
+def test_preview_jobs_changed_reentrant_close_cannot_strand_a_queued_job(
+    tmp_path: Path,
+) -> None:
+    """Close from the synchronous jobs signal must drain the accepted job.
+
+    A previous request() notified jobs_changed *before* enqueueing work.
+    Closing in a listener then stopped the worker and request() enqueued a
+    permanently stranded job (job_count == 1) after close had finished.
+    """
+    source = tmp_path / "close-at-notification.png"
+    image = QImage(64, 48, QImage.Format.Format_RGB32)
+    image.fill(0xFF5588AA)
+    assert image.save(str(source), "PNG")
+    original = source.read_bytes()
+
+    manager = _media_cache_manager(tmp_path / "preview-close-queue", version=13)
+    cache = MediaPreviewCache(workers=1, cache_manager=manager)
+    asset = MediaAsset(
+        asset_id="close-while-notifying",
+        path=str(source),
+        display_name=source.name,
+        media_type=MediaType.PHOTO,
+        metadata=MediaMetadata(width=64, height=48),
+    )
+    notifications: list[int] = []
+
+    def close_on_first_job(job_count: int) -> None:
+        notifications.append(job_count)
+        if job_count == 1:
+            cache.close(timeout=2.0)
+
+    cache.jobs_changed.connect(close_on_first_job)
+    try:
+        assert cache.request(asset) is True
+        assert 1 in notifications
+        assert cache.closed is True
+        assert cache.close(timeout=2.0) is True
+        assert cache.job_count == 0
+        assert cache.request(asset) is False
+        assert all(not worker.is_alive() for worker in cache._threads)
+        assert source.read_bytes() == original
+    finally:
+        cache.close(timeout=2.0)
+
+
 def test_media_preview_cache_close_stops_workers_and_rejects_new_requests(tmp_path: Path) -> None:
     manager = _media_cache_manager(tmp_path / "cache", version=9)
     cache = MediaPreviewCache(workers=2, cache_manager=manager)
