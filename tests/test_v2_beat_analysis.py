@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
@@ -126,6 +127,76 @@ def test_corrupt_beat_cache_is_disposable_miss(tmp_path: Path) -> None:
         second = service.analyze(source)
         assert second.available is True
         assert second.cache_hit is False
+        assert calls == 2
+    finally:
+        tasks.close(timeout=1.0)
+
+
+
+@pytest.mark.parametrize(
+    "malformation",
+    [
+        "non_object_beat",
+        "invalid_envelope_text",
+        "invalid_envelope_bool",
+        "huge_envelope_number",
+        "huge_beat_timestamp",
+        "huge_duration",
+        "wrong_typed_beat_strength",
+        "beat_beyond_audio_duration",
+    ],
+)
+def test_parseable_but_corrupt_beat_cache_triggers_fresh_analysis(
+    tmp_path: Path, malformation: str
+) -> None:
+    source = tmp_path / "song.wav"
+    original_audio = b"source-audio-not-to-be-modified"
+    source.write_bytes(original_audio)
+    calls = 0
+
+    def decoder(_source, _hz, _token):
+        nonlocal calls
+        calls += 1
+        return _fake_envelope()
+
+    service, tasks = _service(tmp_path, decoder)
+    try:
+        first = service.analyze(source)
+        assert first.available and first.beats and first.cache_hit is False
+        path = service.cache_path(source)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if malformation == "non_object_beat":
+            # The old cache loader silently filtered this instead of retrying.
+            payload["beats"].append("not-a-beat")
+        elif malformation == "invalid_envelope_text":
+            payload["envelope"][0] = "not-a-number"
+        elif malformation == "invalid_envelope_bool":
+            payload["envelope"][0] = True
+        elif malformation == "huge_envelope_number":
+            payload["envelope"][0] = 10**400
+        elif malformation == "huge_beat_timestamp":
+            payload["beats"][0]["time_seconds"] = 10**400
+        elif malformation == "huge_duration":
+            payload["duration_seconds"] = 10**400
+        elif malformation == "wrong_typed_beat_strength":
+            payload["beats"][0]["strength"] = "0.9"
+        elif malformation == "beat_beyond_audio_duration":
+            payload["beats"][0]["time_seconds"] = first.duration_seconds + 100
+        else:
+            pytest.fail(f"Unknown malformation: {malformation}")
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+        recovered = service.analyze(source)
+        assert recovered.available is True
+        assert recovered.cache_hit is False
+        assert recovered.beats == first.beats
+        assert recovered.envelope == first.envelope
+        assert calls == 2
+        assert source.read_bytes() == original_audio
+        # The disposable corrupted JSON was replaced, not reused forever.
+        valid_again = service.analyze(source)
+        assert valid_again.cache_hit is True
+        assert valid_again.beats == first.beats
         assert calls == 2
     finally:
         tasks.close(timeout=1.0)

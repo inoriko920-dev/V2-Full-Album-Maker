@@ -343,6 +343,29 @@ class BeatAnalysisService:
             raw_beats = payload.get("beats")
             if not isinstance(raw_envelope, list) or not isinstance(raw_beats, list):
                 raise ValueError("isi cache tidak valid")
+            # Derived cache values were saved as finite, normalized numbers.
+            # Do not silently coerce malformed JSON values to zeros or skip
+            # bad beat entries: that would make a partial, corrupted cache
+            # appear valid and suppress a fresh source analysis.
+            if any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not 0.0 <= value <= 1.0
+                or not math.isfinite(value)
+                for value in raw_envelope
+            ):
+                raise ValueError("nilai envelope cache tidak valid")
+            if any(
+                not isinstance(item, dict)
+                or any(
+                    field not in item
+                    or isinstance(item[field], bool)
+                    or not isinstance(item[field], (int, float))
+                    for field in ("time_seconds", "strength")
+                )
+                for item in raw_beats
+            ):
+                raise ValueError("entri beat cache tidak valid")
             envelope = _normalized_envelope(raw_envelope)
             beats = tuple(
                 BeatEvent(
@@ -350,11 +373,12 @@ class BeatAnalysisService:
                     strength=float(item["strength"]),
                 )
                 for item in raw_beats
-                if isinstance(item, dict)
             )
             duration = float(payload.get("duration_seconds", 0.0))
             if not math.isfinite(duration) or duration < 0:
                 raise ValueError("durasi cache tidak valid")
+            if any(beat.time_seconds > duration + 1e-6 for beat in beats):
+                raise ValueError("waktu beat cache melewati durasi")
             return BeatAnalysisResult(
                 source_path=str(source),
                 fingerprint_token=fingerprint_token,
@@ -365,7 +389,7 @@ class BeatAnalysisService:
                 available=True,
                 cache_hit=True,
             )
-        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, KeyError):
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, OverflowError, KeyError):
             self.cache_manager.evict("beat-analysis", cache_path)
             return None
 
