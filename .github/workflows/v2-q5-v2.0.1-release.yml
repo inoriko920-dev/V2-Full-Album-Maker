@@ -1,0 +1,384 @@
+name: Q5 Stable Release v2.0.1
+
+on:
+  push:
+    branches:
+      - release/q5-v2.0.1
+    paths-ignore:
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: q5-stable-v2.0.1
+  cancel-in-progress: false
+
+jobs:
+  release-q5:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: '1'
+      GH_TOKEN: ${{ github.token }}
+      Q5_VERSION: "2.0.1"
+      Q5_TAG: "v2.0.1"
+      Q4_CANDIDATE_SHA: "35a8c195469d49d7f7938b31761ceb17c4c720e0"
+      Q4_RUN_ID: "37724287381"
+      Q4_ARTIFACT_ID: "11527152731"
+      Q4_ARTIFACT_NAME: "q4-v2.0.1-windows-artifact-candidate"
+      Q4_ZIP_NAME: "Full-Album-Maker-v2.0.1-Windows-Portable.zip"
+      Q4_ZIP_SHA256: "6c97461ee3472973fc9b7950952287ae5aab9ffe2dffbe6a1fb0c236353d4a5d"
+      Q4_ZIP_BYTES: "189598786"
+      ROLLBACK_TAG: "v2.0.0"
+
+    steps:
+      - name: Checkout Q5 control branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12.10
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.10'
+
+      - name: Q5 provenance and no-rebuild hard gate
+        shell: pwsh
+        run: |
+          git cat-file -e "$env:Q4_CANDIDATE_SHA^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw "Q4 candidate commit tidak tersedia." }
+
+          git merge-base --is-ancestor $env:Q4_CANDIDATE_SHA HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Q5 control branch tidak turun dari exact Q4 candidate." }
+
+          $changed = @(git diff --name-only "$env:Q4_CANDIDATE_SHA..HEAD")
+          foreach ($path in $changed) {
+            if ($path -notlike 'docs/*' -and $path -ne '.github/workflows/v2-q5-v2.0.1-release.yml') {
+              throw "Q5 control branch mengubah non-control path setelah Q4 freeze: $path"
+            }
+          }
+
+          $workflow = Get-Content '.github/workflows/v2-q5-v2.0.1-release.yml' -Raw
+          $forbiddenBuild = 'build_' + 'portable.ps1'
+          $forbiddenPackager = 'Py' + 'Installer'
+          if ($workflow.Contains($forbiddenBuild)) { throw "Q5 dilarang rebuild portable ZIP." }
+          if ($workflow.Contains($forbiddenPackager)) { throw "Q5 dilarang menjalankan packager build." }
+          if ($workflow -notmatch [regex]::Escape($env:Q4_CANDIDATE_SHA)) { throw "Q5 workflow tidak mengunci candidate SHA." }
+          if ($workflow -notmatch [regex]::Escape($env:Q4_ZIP_SHA256)) { throw "Q5 workflow tidak mengunci ZIP SHA-256." }
+
+          $manifest = Get-Content 'build/release_manifest.json' -Raw | ConvertFrom-Json
+          if ([string]$manifest.target_stable_version -ne $env:Q5_VERSION) { throw "Release manifest version drift." }
+
+          $notes = Get-Content 'docs/RELEASE_NOTES_v2.0.1.md' -Raw
+          if ($notes -notmatch 'Q5') { throw "Release notes tidak menyebut Q5 gate." }
+
+          Write-Host "Q5_PROVENANCE_NO_REBUILD_PASS"
+
+      - name: Ensure v2.0.1 tag and release are unused
+        shell: pwsh
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+
+          try {
+            Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$env:Q5_TAG" | Out-Null
+            throw "Stable release $env:Q5_TAG sudah ada; Q5 tidak boleh overwrite."
+          }
+          catch {
+            if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+          }
+
+          try {
+            Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:Q5_TAG" | Out-Null
+            throw "Tag $env:Q5_TAG sudah ada; Q5 tidak boleh overwrite."
+          }
+          catch {
+            if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+          }
+
+          Write-Host "Q5_UNUSED_TAG_RELEASE_PASS"
+
+      - name: Verify rollback release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force 'q5-release-evidence' | Out-Null
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $rollback = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$env:ROLLBACK_TAG"
+          if ($rollback.draft -or $rollback.prerelease) { throw "Rollback target bukan stable release." }
+          if (-not $rollback.published_at) { throw "Rollback target tidak memiliki published_at." }
+          [ordered]@{
+            tag = $rollback.tag_name
+            name = $rollback.name
+            target_commitish = $rollback.target_commitish
+            published_at = $rollback.published_at
+            html_url = $rollback.html_url
+          } | ConvertTo-Json -Depth 5 | Set-Content 'q5-release-evidence\rollback.json' -Encoding utf8
+          Write-Host "Q5_ROLLBACK_PASS $($rollback.tag_name)"
+
+      - name: Download frozen Q4 Actions artifact
+        shell: pwsh
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $q4Run = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:Q4_RUN_ID"
+          if ($q4Run.status -ne "completed" -or $q4Run.conclusion -ne "success" -or $q4Run.head_sha -ne $env:Q4_CANDIDATE_SHA) {
+            throw "Frozen Q4 run bukan successful exact candidate."
+          }
+          $q4Artifact = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:Q4_ARTIFACT_ID"
+          if ($q4Artifact.expired -or $q4Artifact.name -ne $env:Q4_ARTIFACT_NAME -or $q4Artifact.workflow_run.id -ne [int64]$env:Q4_RUN_ID) {
+            throw "Frozen Q4 artifact provenance tidak valid atau sudah kedaluwarsa."
+          }
+          Invoke-WebRequest -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$env:Q4_ARTIFACT_ID/zip" -OutFile 'q4-actions-artifact.zip'
+
+          if ((Get-Item 'q4-actions-artifact.zip').Length -lt 1000000) { throw "Downloaded Q4 Actions artifact terlalu kecil." }
+
+          Expand-Archive 'q4-actions-artifact.zip' -DestinationPath 'q4-frozen'
+          $inner = Join-Path 'q4-frozen' $env:Q4_ZIP_NAME
+          if (-not (Test-Path $inner)) { throw "Exact Q4 inner ZIP tidak ditemukan." }
+          if ((Get-Item $inner).Length -ne [int64]$env:Q4_ZIP_BYTES) { throw "Exact Q4 inner ZIP size drift." }
+
+          $actual = (Get-FileHash $inner -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:Q4_ZIP_SHA256) { throw "Exact Q4 inner ZIP digest drift: $actual" }
+
+          $checksum = Get-Content 'q4-frozen\SHA256SUMS.txt' -Raw
+          $expectedLine = "$env:Q4_ZIP_SHA256  $env:Q4_ZIP_NAME"
+          if ($checksum.Trim() -ne $expectedLine) { throw "Q4 SHA256SUMS.txt drift." }
+
+          Write-Host "Q5_FROZEN_ARTIFACT_IDENTITY_PASS $actual"
+
+      - name: Re-verify exact Q4 embedded provenance
+        shell: pwsh
+        run: |
+          @'
+          import json
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          outer = Path("q4-frozen") / os.environ["Q4_ZIP_NAME"]
+          expected_commit = os.environ["Q4_CANDIDATE_SHA"]
+          expected_version = os.environ["Q5_VERSION"]
+
+          with ZipFile(outer) as zf:
+              names = zf.namelist()
+              def find(suffix: str) -> str:
+                  matches = [name for name in names if name.replace("\\", "/").endswith(suffix)]
+                  if len(matches) != 1:
+                      raise SystemExit(f"{suffix}: expected one member, got {matches}")
+                  return matches[0]
+
+              capabilities = json.loads(zf.read(find("/CAPABILITIES.json")).decode("utf-8"))
+              embedded_manifest = json.loads(zf.read(find("/RELEASE_MANIFEST.json")).decode("utf-8"))
+              notices = zf.read(find("/THIRD_PARTY_NOTICES.md")).decode("utf-8")
+
+          repo_manifest = json.loads(Path("build/release_manifest.json").read_text(encoding="utf-8"))
+          if embedded_manifest != repo_manifest:
+              raise SystemExit("Embedded release manifest drift.")
+          if capabilities["app_version"] != expected_version:
+              raise SystemExit("Embedded app version drift.")
+          if capabilities["build_commit"] != expected_commit:
+              raise SystemExit("Embedded candidate commit drift.")
+          if capabilities["bundled"]["ffmpeg"] != repo_manifest["ffmpeg"]:
+              raise SystemExit("Embedded FFmpeg provenance drift.")
+          if capabilities["bundled"]["font"] != repo_manifest["font"]:
+              raise SystemExit("Embedded font provenance drift.")
+
+          ffmpeg = repo_manifest["ffmpeg"]
+          for value in (ffmpeg["asset_name"], ffmpeg["sha256"], ffmpeg["release_tag"]):
+              if str(value) not in notices:
+                  raise SystemExit(f"Notice provenance missing: {value}")
+
+          print("Q5_EMBEDDED_PROVENANCE_PASS")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Q5 embedded provenance gate gagal." }
+
+      - name: Smoke exact frozen ZIP without global Python FFmpeg or API keys
+        shell: pwsh
+        run: |
+          $smokeRoot = "q5 smoke – O'Brien"
+          if (Test-Path $smokeRoot) { Remove-Item $smokeRoot -Recurse -Force }
+          Expand-Archive (Join-Path 'q4-frozen' $env:Q4_ZIP_NAME) -DestinationPath $smokeRoot
+
+          $exe = Get-ChildItem $smokeRoot -Recurse -Filter 'Full Album Maker.exe' | Select-Object -First 1
+          if (-not $exe) { throw "Portable EXE tidak ditemukan dari exact Q4 ZIP." }
+
+          $oldPath = $env:PATH
+          $oldGemini = $env:GEMINI_API_KEY
+          $oldGoogle = $env:GOOGLE_API_KEY
+          $oldPythonHome = $env:PYTHONHOME
+          $oldPythonPath = $env:PYTHONPATH
+          try {
+            $env:GEMINI_API_KEY = $null
+            $env:GOOGLE_API_KEY = $null
+            $env:PYTHONHOME = $null
+            $env:PYTHONPATH = $null
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+
+            if (Get-Command python -ErrorAction SilentlyContinue) { throw "Q5 isolation gagal: global Python masih tersedia." }
+            if (Get-Command ffmpeg -ErrorAction SilentlyContinue) { throw "Q5 isolation gagal: global FFmpeg masih tersedia." }
+
+            $process = Start-Process -FilePath $exe.FullName -ArgumentList '--portable-smoke' -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "Exact Q4 portable smoke exit $($process.ExitCode)." }
+          }
+          finally {
+            $env:PATH = $oldPath
+            $env:GEMINI_API_KEY = $oldGemini
+            $env:GOOGLE_API_KEY = $oldGoogle
+            $env:PYTHONHOME = $oldPythonHome
+            $env:PYTHONPATH = $oldPythonPath
+          }
+
+          $smoke = Get-Content (Join-Path $exe.DirectoryName 'temp\portable-smoke.json') -Raw | ConvertFrom-Json
+          if (-not $smoke.ok) { throw "Q5 exact ZIP smoke ok=false." }
+          if ($smoke.api_key_present) { throw "Q5 exact ZIP smoke melihat API key." }
+          if ($smoke.output_streams -notcontains 'audio' -or $smoke.output_streams -notcontains 'video') { throw "Q5 exact ZIP smoke tidak membuktikan audio+video." }
+          if ($smoke.gui_title -notlike "*v$env:Q5_VERSION*") { throw "Q5 exact ZIP GUI version mismatch." }
+          $smoke | ConvertTo-Json -Depth 10 | Set-Content 'q5-release-evidence\portable-smoke.json' -Encoding utf8
+          Write-Host "Q5_EXACT_ZIP_SMOKE_PASS"
+
+      - name: Secret and release metadata recheck
+        shell: pwsh
+        run: |
+          @'
+          import json
+          import re
+          from pathlib import Path
+
+          patterns = {
+              "PRIVATE_KEY": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              "GITHUB_TOKEN": re.compile(r"gh[pousr]_[A-Za-z0-9]{36,255}"),
+              "GOOGLE_API_KEY": re.compile(r"AIza[0-9A-Za-z_-]{35}"),
+              "OPENAI_LIKE_KEY": re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+          }
+          hits = []
+          for root in (Path("src"), Path("docs"), Path("build")):
+              for path in root.rglob("*"):
+                  if not path.is_file():
+                      continue
+                  try:
+                      text = path.read_text(encoding="utf-8")
+                  except Exception:
+                      continue
+                  for line_no, line in enumerate(text.splitlines(), 1):
+                      for kind, pattern in patterns.items():
+                          if pattern.search(line):
+                              hits.append((str(path), line_no, kind))
+          if hits:
+              raise SystemExit(f"Secret scan gagal: {hits[:10]}")
+
+          manifest = json.loads(Path("build/release_manifest.json").read_text(encoding="utf-8"))
+          if manifest["target_stable_version"] != "2.0.1":
+              raise SystemExit("Stable version drift.")
+          print("Q5_SECRET_METADATA_PASS")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Q5 secret/metadata gate gagal." }
+
+      - name: Prepare stable release notes and Q5 evidence
+        shell: pwsh
+        run: |
+          $sourceNotes = Get-Content 'docs/RELEASE_NOTES_v2.0.1.md' -Raw
+          $sourceNotes = $sourceNotes.Replace('Status: **Release candidate — not published**', 'Status: **Stable — Q5 Release Quality Gate PASS**')
+          $sourceNotes = $sourceNotes.Replace('**Q4 and Q5 pending.**', '**Q4 and Q5 PASS.**')
+          $sourceNotes = $sourceNotes.Replace('Q5 must approve the exact semantic version + candidate commit + ZIP SHA-256 and then publish that exact tested ZIP without rebuilding it.', 'Q5 approved the exact semantic version + candidate commit + ZIP SHA-256; this stable publication uses that exact tested ZIP without rebuilding it.')
+
+          $rollback = Get-Content 'q5-release-evidence\rollback.json' -Raw | ConvertFrom-Json
+          $identity = @(
+            ''
+            '## Q5 verified release identity'
+            ''
+            "- Version: $env:Q5_VERSION"
+            "- Candidate commit: $env:Q4_CANDIDATE_SHA"
+            "- Portable ZIP: $env:Q4_ZIP_NAME"
+            "- Portable ZIP SHA-256: $env:Q4_ZIP_SHA256"
+            "- Q4 Actions run: $env:Q4_RUN_ID"
+            "- Q4 Actions artifact ID: $env:Q4_ARTIFACT_ID"
+            "- Rollback stable tag: $($rollback.tag)"
+            ''
+            'Q5 re-ran the extracted exact ZIP smoke without global Python, global FFmpeg, or API keys before publication. The stable asset is the same Q4-tested ZIP; it was not rebuilt.'
+          ) -join [Environment]::NewLine
+          ($sourceNotes + [Environment]::NewLine + $identity) | Set-Content 'q5-release-notes.md' -Encoding utf8
+
+          [ordered]@{
+            status = 'PASS_READY_TO_PUBLISH'
+            version = $env:Q5_VERSION
+            tag = $env:Q5_TAG
+            candidate_sha = $env:Q4_CANDIDATE_SHA
+            q4_run_id = [int64]$env:Q4_RUN_ID
+            q4_artifact_id = [int64]$env:Q4_ARTIFACT_ID
+            portable_zip = $env:Q4_ZIP_NAME
+            portable_zip_sha256 = $env:Q4_ZIP_SHA256
+            portable_zip_bytes = [int64]$env:Q4_ZIP_BYTES
+            rollback_tag = $rollback.tag
+            rollback_target = $rollback.target_commitish
+            exact_zip_rebuilt = $false
+            exact_zip_smoke = 'PASS'
+            embedded_provenance = 'PASS'
+            secret_scan = 'PASS'
+            publication_performed = $false
+          } | ConvertTo-Json -Depth 8 | Set-Content 'q5-release-evidence\summary-prepublish.json' -Encoding utf8
+
+      - name: Publish exact Q4-tested ZIP as stable v2.0.1
+        shell: pwsh
+        run: |
+          gh release create $env:Q5_TAG --repo $env:GITHUB_REPOSITORY --target $env:Q4_CANDIDATE_SHA --title "Full Album Maker v$env:Q5_VERSION" --notes-file 'q5-release-notes.md' (Join-Path 'q4-frozen' $env:Q4_ZIP_NAME) 'q4-frozen\SHA256SUMS.txt'
+          if ($LASTEXITCODE -ne 0) { throw "GitHub stable release publication gagal." }
+
+      - name: Verify published tag release and downloaded asset identity
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force 'q5-published-download' | Out-Null
+
+          gh release download $env:Q5_TAG --repo $env:GITHUB_REPOSITORY --pattern $env:Q4_ZIP_NAME --pattern 'SHA256SUMS.txt' --dir 'q5-published-download'
+          if ($LASTEXITCODE -ne 0) { throw "Tidak dapat mengunduh kembali published assets." }
+
+          $publishedZip = Join-Path 'q5-published-download' $env:Q4_ZIP_NAME
+          $publishedSha = (Get-FileHash $publishedZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($publishedSha -ne $env:Q4_ZIP_SHA256) { throw "Published ZIP tidak identik dengan Q4 ZIP." }
+          if ((Get-Item $publishedZip).Length -ne [int64]$env:Q4_ZIP_BYTES) { throw "Published ZIP size drift." }
+
+          $publishedChecksum = (Get-Content 'q5-published-download\SHA256SUMS.txt' -Raw).Trim()
+          if ($publishedChecksum -ne "$env:Q4_ZIP_SHA256  $env:Q4_ZIP_NAME") { throw "Published checksum asset drift." }
+
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$env:Q5_TAG"
+          if ($release.draft -or $release.prerelease) { throw "Published release bukan stable." }
+
+          $tag = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:Q5_TAG"
+          if ($tag.object.type -ne 'commit' -or $tag.object.sha -ne $env:Q4_CANDIDATE_SHA) { throw "Published tag tidak menunjuk exact Q4 candidate." }
+
+          $assetNames = @($release.assets | ForEach-Object { $_.name })
+          if ($assetNames -notcontains $env:Q4_ZIP_NAME -or $assetNames -notcontains 'SHA256SUMS.txt') { throw "Stable release assets tidak lengkap." }
+
+          [ordered]@{
+            status = 'PASS_PUBLISHED'
+            version = $env:Q5_VERSION
+            tag = $env:Q5_TAG
+            candidate_sha = $env:Q4_CANDIDATE_SHA
+            portable_zip = $env:Q4_ZIP_NAME
+            portable_zip_sha256 = $publishedSha
+            portable_zip_bytes = (Get-Item $publishedZip).Length
+            release_id = $release.id
+            release_url = $release.html_url
+            published_at = $release.published_at
+            tag_target_sha = $tag.object.sha
+            draft = $release.draft
+            prerelease = $release.prerelease
+            rollback_tag = $env:ROLLBACK_TAG
+            exact_zip_rebuilt = $false
+            publication_performed = $true
+            published_asset_redownload_verified = $true
+          } | ConvertTo-Json -Depth 8 | Set-Content 'q5-release-evidence\summary.json' -Encoding utf8
+
+          Get-Content 'q5-release-evidence\summary.json'
+          Write-Host "Q5_RELEASE_PUBLICATION_PASS"
+
+      - name: Upload Q5 release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: q5-release-evidence
+          path: |
+            q5-release-evidence/**
+            q5-release-notes.md
+          if-no-files-found: error
