@@ -300,3 +300,20 @@ This supersedes older statements that v2.0.3 Q4 is not started. The **published 
 - Protected-main CI after Q4 merge `37737069774` must PASS before initiating the Q5 publisher.
 - **Q4 PASS/FROZEN. Q5 NOT STARTED. v2.0.3 NOT PUBLISHED.**
 - Next action: exact-Q4-artifact v2.0.3 Q5 verification **without rebuilding**, followed by download of published ZIP, checksum and tag verification. Preserve v2.0.2/v2.0.1/v2.0.0 unchanged.
+
+
+## October 8, 2026 — v2.0.3 STABLE / PUBLISHED (latest)
+
+This supersedes previous v2.0.3 Q4-only or Q5-pending status entries; their frozen evidence remains historically valid.
+
+- Source safety fix PR #45 (preview cache non-object JSON): merged and Windows validated. P01 patch version PR #46 merged and `main` CI run `37736088109` PASS.
+- Q4 workflow PR #47 merged; Q4 Windows run `37736530557` PASS (**775 regression tests and 1 pinned FFmpeg filter test**); exact frozen source SHA `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d`. Q4 Actions artifact ID `11531549824`.
+- Q4 ZIP `Full-Album-Maker-v2.0.3-Windows-Portable.zip` — **189599847 bytes**, SHA-256 `b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0`.
+- Q4 evidence documentation PR #48 merged. Protected-main CI after PR #47 `37737069774` PASS, PR #48 Windows CI `37737247516` PASS.
+- **Q5 v2.0.3 PASS / PUBLISHED** on workflow `37737839379` (control SHA `28fcc614630bac1ca6ffbb88ee527869bf5a775e`).
+- Stable release ID `406491420`, published **2026-10-08 13:29:47 WIB**; tag `v2.0.3` points directly to frozen Q4 source SHA `ee61ca0af5d15cdc51af91ad48e05bc2b641f49d`.
+- Q5 downloaded exact Q4 artifact without rebuilding, re-ran isolated smoke, published and re-downloaded exact ZIP/checksum to verify byte count and SHA-256. Q5 audit artifact ID `11532163113`.
+- Latest release: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.3
+- Authoritative evidence: `docs/implementation/Q4_V2_0_3_EVIDENCE.md`, `docs/implementation/Q5_V2_0_3_EVIDENCE.md`.
+- v2.0.2, v2.0.1 and v2.0.0 release tags, ZIPs and checksums are unchanged and available for side-by-side rollback. Original `inoriko920-dev/Full-Album-Maker` repo remains untouched.
+- **Current phase:** post-release maintenance; all v2.0.3 Q4/Q5 gates completed. A changed executable needs a new version, fresh Windows CI and separately frozen Q4/Q5.
