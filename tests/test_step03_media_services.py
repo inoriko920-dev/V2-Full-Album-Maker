@@ -1056,3 +1056,118 @@ def test_deferred_relink_without_local_source_does_not_move_foreign_record(
 
     assert foreign.path.read_bytes() == before
     assert source.has_pending_changes is True
+
+
+def test_sidecar_transient_read_permission_error_retries_without_quarantine(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "ReadRetry.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("asset", description="healthy media metadata", favorite=True)
+    target = seed.path
+    assert target is not None
+    original_bytes = target.read_bytes()
+
+    original_read_text = Path.read_text
+    attempts = 0
+
+    def fail_once(self: Path, *args, **kwargs):
+        nonlocal attempts
+        if self == target:
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError("sharing violation from another app")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_once)
+    store = MediaSidecarStore(project)
+    try:
+        store.load()
+    except SidecarStoreError as exc:
+        assert not isinstance(exc, SidecarCorruptionError)
+        assert "sharing violation" in str(exc)
+    else:
+        raise AssertionError("Transient read error must propagate as retryable")
+
+    assert store._loaded is False
+    assert store.persistence_blocked is False
+    assert store.quarantined_path is None
+    assert not store.last_recovery_warning
+    assert target.read_bytes() == original_bytes
+    assert list(tmp_path.glob("*.corrupt-*")) == []
+
+    assert store.get("asset").description == "healthy media metadata"
+    assert store.get("asset").favorite is True
+    assert store._loaded is True
+    assert attempts == 2
+    assert target.read_bytes() == original_bytes
+
+
+def test_sidecar_save_keeps_pending_edits_when_disk_read_temporarily_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "WriteReadRetry.json"
+    project.write_text("{}", encoding="utf-8")
+    seed = MediaSidecarStore(project)
+    seed.update("local", description="preserve disk description")
+    seed.update("other", favorite=True)
+    target = seed.path
+    assert target is not None
+
+    store = MediaSidecarStore(project)
+    store.update("local", tags=("pending-tag",), persist=False)
+    assert store.has_pending_changes
+    before = target.read_bytes()
+
+    original_read_text = Path.read_text
+    attempts = 0
+
+    def fail_once(self: Path, *args, **kwargs):
+        nonlocal attempts
+        if self == target:
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError("antivirus temporarily locked file")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_once)
+    try:
+        store.save()
+    except SidecarStoreError as exc:
+        assert not isinstance(exc, SidecarCorruptionError)
+    else:
+        raise AssertionError("Save must fail closed on unreadable healthy disk file")
+
+    assert store.has_pending_changes
+    assert store.get("local").tags == ("pending-tag",)
+    assert target.read_bytes() == before
+    assert store.quarantined_path is None
+    assert list(tmp_path.glob("*.corrupt-*")) == []
+
+    assert store.save() is True
+    assert not store.has_pending_changes
+    disk = MediaSidecarStore(project)
+    assert disk.get("local").description == "preserve disk description"
+    assert disk.get("local").tags == ("pending-tag",)
+    assert disk.get("other").favorite is True
+
+
+def test_sidecar_invalid_utf8_still_quarantines_genuinely_corrupt_bytes(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "UnreadableEncoding.json"
+    project.write_text("{}", encoding="utf-8")
+    store = MediaSidecarStore(project)
+    target = store.path
+    assert target is not None
+    bad_data = b"\xff\xfe\x80invalid utf-8"
+    target.write_bytes(bad_data)
+
+    assert store.load() == {}
+    assert store.quarantined_path is not None
+    assert store.quarantined_path.read_bytes() == bad_data
+    assert not target.exists()
+    assert "karantina" in store.last_recovery_warning
