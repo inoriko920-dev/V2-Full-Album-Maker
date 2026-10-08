@@ -1,0 +1,88 @@
+name: v2.0.3 stable release notes reconciliation
+
+on:
+  push:
+    branches:
+      - release/v2.0.3-notes-final-20261008
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v2.0.3-stable-notes-only
+  cancel-in-progress: false
+
+jobs:
+  reconcile-notes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STABLE_TAG: v2.0.3
+      Q4_SHA: "ee61ca0af5d15cdc51af91ad48e05bc2b641f49d"
+      ZIP_NAME: "Full-Album-Maker-v2.0.3-Windows-Portable.zip"
+      ZIP_DIGEST: "sha256:b2b2a3c7bac889f63ca2d84ffc65b035533ab22b22dc5c31e22bd1d1ae7247f0"
+      ZIP_BYTES: "189599847"
+
+    steps:
+      - name: Checkout verified notes source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify frozen stable release before editing notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes=docs/RELEASE_NOTES_v2.0.3.md
+          grep -Fq '# Full Album Maker v2.0.3 — Stable Patch Release' "$notes"
+          grep -Fq 'Status: **Stable — Q5 Release Quality Gate PASS**' "$notes"
+          grep -Fq '**Q4 and Q5 PASS.**' "$notes"
+          grep -Fq "$Q4_SHA" "$notes"
+          grep -Fq "${ZIP_DIGEST#sha256:}" "$notes"
+          if grep -Fq 'proposed patch changelog' "$notes"; then exit 1; fi
+          if grep -Fq 'not a stable release announcement' "$notes"; then exit 1; fi
+
+          pre_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$STABLE_TAG" --jq '.object.sha')"
+          test "$pre_sha" = "$Q4_SHA"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$STABLE_TAG")"
+          echo "$release_json" | jq -e '.draft == false and .prerelease == false'
+          zip_info="$(echo "$release_json" | jq -c --arg n "$ZIP_NAME" '[.assets[] | select(.name == $n) | {id,name,size,digest}]')"
+          echo "$zip_info" | jq -e --arg n "$ZIP_NAME" --arg d "$ZIP_DIGEST" --argjson bytes "$ZIP_BYTES" 'length == 1 and .[0].name == $n and .[0].digest == $d and .[0].size == $bytes'
+          echo "$release_json" | jq -e '[.assets[].name] | sort == (["SHA256SUMS.txt", "Full-Album-Maker-v2.0.3-Windows-Portable.zip"] | sort)'
+          before_assets="$(echo "$release_json" | jq -c '[.assets[] | {id,name,size,digest}] | sort_by(.name)')"
+          printf '%s\n' "$before_assets" > notes-assets-before.json
+          echo "RELEASE_NOTES_PRECHECK_PASS"
+
+      - name: Edit description only (never artifacts or tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$STABLE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file docs/RELEASE_NOTES_v2.0.3.md
+          echo "STABLE_DESCRIPTION_UPDATED"
+
+      - name: Reverify immutable tag and assets after edit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$STABLE_TAG" --jq '.object.sha')" = "$Q4_SHA"
+          after_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$STABLE_TAG")"
+          echo "$after_json" | jq -e '.draft == false and .prerelease == false'
+          after_assets="$(echo "$after_json" | jq -c '[.assets[] | {id,name,size,digest}] | sort_by(.name)')"
+          test "$after_assets" = "$(cat notes-assets-before.json)"
+          text="$(echo "$after_json" | jq -r '.body')"
+          printf '%s\n' "$text" | grep -Fq '# Full Album Maker v2.0.3 — Stable Patch Release'
+          printf '%s\n' "$text" | grep -Fq 'Status: **Stable — Q5 Release Quality Gate PASS**'
+          printf '%s\n' "$text" | grep -Fq '**Q4 and Q5 PASS.**'
+          if printf '%s\n' "$text" | grep -Fq 'proposed patch changelog'; then exit 1; fi
+          mkdir -p release-notes-evidence
+          echo "$after_assets" > release-notes-evidence/assets-after.json
+          printf '%s\n' "$text" > release-notes-evidence/published-description.md
+          printf '%s\n' "$Q4_SHA" > release-notes-evidence/tag-target.txt
+          echo "RELEASE_NOTES_ONLY_UPDATE_PASS"
+
+      - name: Upload release notes audit evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: v2.0.3-release-notes-reconciliation
+          path: release-notes-evidence/**
+          if-no-files-found: error
