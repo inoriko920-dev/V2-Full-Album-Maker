@@ -209,8 +209,8 @@ def test_failed_save_as_metadata_survives_explicit_refresh_until_retry(
     media_feature._refresh_media(fake, reset=True)
     assert fake._s03_store is store
     assert not store.has_pending_changes
-    assert MediaSidecarStore(destination).get("asset-source").tags == ("original")
-    assert MediaSidecarStore(source).get("asset-source").tags == ("original")
+    assert MediaSidecarStore(destination).get("asset-source").tags == ("original",)
+    assert MediaSidecarStore(source).get("asset-source").tags == ("original",)
 
 
 def test_explicit_refresh_still_reloads_remote_metadata_without_pending_edits(
