@@ -156,6 +156,7 @@ class TemplateThumbnailCache(QObject):
         self._lock = threading.Lock()
         self._pending: dict[str, Future] = {}
         self._failed_keys: set[str] = set()
+        self._closed = False
 
     def path_for_key(self, key: str) -> Path:
         return self.root / f"{key}.png"
@@ -168,14 +169,21 @@ class TemplateThumbnailCache(QObject):
         *,
         custom_template: CustomTemplate | None = None,
     ) -> str | None:
+        with self._lock:
+            if self._closed:
+                return None
+
         key = thumbnail_cache_key(document, descriptor, draft, custom_template)
         destination = self.path_for_key(key)
         if destination.is_file() and destination.stat().st_size > 0:
+            with self._lock:
+                if self._closed:
+                    return None
             self.thumbnail_ready.emit(descriptor.template_id, str(destination), "CACHE_HIT")
             return str(destination)
 
         with self._lock:
-            if key in self._failed_keys or key in self._pending:
+            if self._closed or key in self._failed_keys or key in self._pending:
                 return None
             snapshot = document.clone()
             draft_copy = deepcopy(draft)
@@ -229,6 +237,8 @@ class TemplateThumbnailCache(QObject):
             template_id, path, status = "", "", "FALLBACK"
         with self._lock:
             self._pending.pop(key, None)
+            if self._closed:
+                return
             if status == "FALLBACK":
                 self._failed_keys.add(key)
             else:
@@ -248,4 +258,8 @@ class TemplateThumbnailCache(QObject):
             self._failed_keys.clear()
 
     def close(self) -> None:
+        # Set the guard before shutdown: cancellation may invoke callbacks
+        # synchronously, while already-running renderers finish later.
+        with self._lock:
+            self._closed = True
         self._executor.shutdown(wait=False, cancel_futures=True)
