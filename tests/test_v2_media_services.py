@@ -22,7 +22,7 @@ from full_album_maker.cache_manager import (
 )
 from full_album_maker.editor_models import ProjectDocument
 from full_album_maker.media_library_model import MediaAsset, MediaMetadata, MediaType
-from full_album_maker.media_preview_cache import MediaPreviewCache, generate_preview
+from full_album_maker.media_preview_cache import MediaPreviewCache, generate_preview, invalidate_source
 from full_album_maker.media_probe_service import (
     MediaProbeResult,
     MediaProbeService,
@@ -311,3 +311,84 @@ def test_media_preview_cache_close_suppresses_inflight_completion(tmp_path: Path
     assert job_updates == updates_at_close
     assert cache.job_count == 0
     assert all(not worker.is_alive() for worker in cache._threads)
+
+
+@pytest.mark.parametrize("wrong_root", [[], None, 42, "not a cache record"])
+def test_preview_cache_nonobject_json_is_cache_miss_not_preview_failure(
+    tmp_path: Path,
+    wrong_root,
+) -> None:
+    source = tmp_path / "original-source.png"
+    image = QImage(64, 48, QImage.Format.Format_RGB32)
+    image.fill(0xFF4477AA)
+    assert image.save(str(source), "PNG")
+    original_source_bytes = source.read_bytes()
+
+    manager = _media_cache_manager(tmp_path / "preview-cache-nonobject", version=11)
+    asset = MediaAsset(
+        asset_id="bad-root-photo",
+        path=str(source),
+        display_name=source.name,
+        media_type=MediaType.PHOTO,
+        metadata=MediaMetadata(width=64, height=48),
+    )
+
+    preview = Path(generate_preview(asset, cache_manager=manager))
+    metadata = preview.with_suffix(".json")
+    assert preview.is_file()
+    metadata.write_text(json.dumps(wrong_root), encoding="utf-8")
+
+    # The cache has a parseable JSON document, but not a metadata object.
+    # The app must regenerate this disposable preview, not raise AttributeError.
+    regenerated = Path(generate_preview(asset, cache_manager=manager))
+    assert regenerated == preview
+    assert regenerated.is_file()
+    assert regenerated.stat().st_size > 0
+    record = json.loads(metadata.read_text(encoding="utf-8"))
+    assert isinstance(record, dict)
+    assert record["asset_id"] == asset.asset_id
+    assert record["version"] == 11
+    assert source.read_bytes() == original_source_bytes
+
+
+def test_invalidate_preview_skips_nonobject_json_and_continues_to_valid_record(
+    tmp_path: Path,
+) -> None:
+    image = QImage(64, 48, QImage.Format.Format_RGB32)
+    image.fill(0xFF4477AA)
+    broken_source = tmp_path / "broken-cache-but-healthy-source.png"
+    valid_source = tmp_path / "updated-source.png"
+    assert image.save(str(broken_source), "PNG")
+    assert image.save(str(valid_source), "PNG")
+    original_broken = broken_source.read_bytes()
+    original_valid = valid_source.read_bytes()
+
+    manager = _media_cache_manager(tmp_path / "preview-cache-invalidation", version=12)
+    bad_asset = MediaAsset(
+        asset_id="bad-preview-metadata",
+        path=str(broken_source),
+        display_name=broken_source.name,
+        media_type=MediaType.PHOTO,
+    )
+    valid_asset = MediaAsset(
+        asset_id="valid-preview-metadata",
+        path=str(valid_source),
+        display_name=valid_source.name,
+        media_type=MediaType.PHOTO,
+    )
+    bad_preview = Path(generate_preview(bad_asset, cache_manager=manager))
+    valid_preview = Path(generate_preview(valid_asset, cache_manager=manager))
+    bad_meta = bad_preview.with_suffix(".json")
+    valid_meta = valid_preview.with_suffix(".json")
+    bad_meta.write_text("[]", encoding="utf-8")
+
+    # Invalidation must process every candidate even when an unrelated record
+    # has a malformed JSON root. Neither source file may be affected.
+    count = invalidate_source(valid_source, cache_manager=manager)
+    assert count == 2
+    assert not valid_preview.exists()
+    assert not valid_meta.exists()
+    assert bad_preview.exists()
+    assert bad_meta.read_text(encoding="utf-8") == "[]"
+    assert broken_source.read_bytes() == original_broken
+    assert valid_source.read_bytes() == original_valid
