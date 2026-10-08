@@ -121,3 +121,14 @@ Published stable versions v2.0.3, v2.0.2, v2.0.1, v2.0.0 and v1.5.0 remain immut
 - Q5 evidence `docs/implementation/Q5_V2_0_4_EVIDENCE.md`.
 
 **Keep v2.0.4 and every earlier stable tag, ZIP and checksum immutable.** New executable changes require a later semantic version and independent Q4/Q5. Original `inoriko920-dev/Full-Album-Maker` remains read-only.
+
+## v2.0.5 latest stable — immutable record (October 8, 2026)
+
+- Stable GitHub release: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.5, ID `406656131` (published `2026-10-08 16:29:52 WIB`).
+- Tag directly points to Q4 frozen source `645fa166aa7a4cdc372b80c82db09026a7ab9b95`; not Q5 control or merge SHA.
+- Exact portable `Full-Album-Maker-v2.0.5-Windows-Portable.zip`: **189598540 bytes**, SHA-256 `8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`.
+- Q4 run `37754857699`, Actions artifact `11540026862`; 791 regressions + 1 pinned FFmpeg external-filter and isolated A/V smoke PASS.
+- Q5 no-rebuild publication run `37756942493`, evidence artifact `11540114007`. Published ZIP and SHA256SUMS re-downloaded and verified.
+- Complete Q5 proof: `docs/implementation/Q5_V2_0_5_EVIDENCE.md`.
+
+**Keep v2.0.5 and all prior stable tags/ZIP/checksums immutable.** New executable work requires a later version with full independent Q4/Q5. Original `inoriko920-dev/Full-Album-Maker` remains read-only.

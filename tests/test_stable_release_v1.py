@@ -28,11 +28,17 @@ def test_stable_version_is_consistent_across_package_metadata():
     assert notes.exists()
     text = notes.read_text(encoding="utf-8")
     assert f"Full-Album-Maker-v{__version__}-Windows-Portable.zip" in text
-    # P01 v2.0.5 must remain unpublished until the independent Q4/Q5 gates.
+    # The published v2.0.5 stable requires independent Q5 no-rebuild evidence.
     if __version__ == "2.0.5":
-        assert "Status: **Release candidate — not published**" in text
-        assert "**Q4 and Q5 pending.**" in text
-        assert "v2.0.5 is only a candidate" in text
+        assert "Status: **Stable — Q5 Release Quality Gate PASS**" in text
+        assert "Q4 and Q5 PASS" in text
+        assert "645fa166aa7a4cdc372b80c82db09026a7ab9b95" in text
+        assert "8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74" in text
+        evidence = (ROOT / "docs/implementation/Q5_V2_0_5_EVIDENCE.md").read_text(encoding="utf-8")
+        assert "Status: **PASS — Stable v2.0.5 PUBLISHED**" in evidence
+        assert "exact_zip_rebuilt = false" in evidence
+        assert "published_asset_redownload_verified = true" in evidence
+        assert "406656131" in evidence
     # The previous published stable requires its real immutable Q5 evidence.
     elif __version__ == "2.0.4":
         assert "Status: **Stable — Q5 Release Quality Gate PASS**" in text

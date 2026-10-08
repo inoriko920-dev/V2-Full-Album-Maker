@@ -1,42 +1,50 @@
-# Full Album Maker v2.0.5 — Patch Release Candidate
+# Full Album Maker v2.0.5 — Stable Patch Release
 
-Status: **Release candidate — not published**
+Status: **Stable — Q5 Release Quality Gate PASS**
 
-**Q4 and Q5 pending.** This document describes a planned patch, **not** a published stable GitHub Release or downloadable v2.0.5 ZIP. The latest **published** stable remains v2.0.4.
+**Q4 and Q5 PASS.** The exact Windows portable ZIP frozen by Q4 is published without rebuilding, repacking or recompressing. Q5 re-downloaded the published assets to verify byte-for-byte identity.
 
-Planned portable artifact: `Full-Album-Maker-v2.0.5-Windows-Portable.zip` (**not frozen, not published, no SHA-256 assigned**).
+## Improvements since stable v2.0.4
 
-## Changes since stable v2.0.4
+- **PR #57 — Beat Analysis cache corruption recovery:** malformed but parseable JSON cache entries no longer silently drop beat events, convert invalid envelope entries into usable values, or fail on huge numeric inputs. The disposable cache is regenerated safely from the existing source audio.
+- Eight parametrized regression cases cover malformed beat entries, invalid strength/timestamp/duration/envelope, and ensure original audio is unchanged and repaired cache is reused.
+- No UI redesign, authored project/schema migration, new package dependency, FFmpeg/font pin change or render-engine replacement.
 
-- **PR #57 — Beat Analysis corrupted cache recovery.** A parseable but malformed JSON Beat Analysis cache must not silently drop beat events or turn bad envelope elements into zeros. Invalid beat shapes/types, oversized numeric values, invalid envelope, and beats beyond source duration are discarded **as disposable cache**, followed by recomputation from the unchanged original source audio.
-- Eight new parametrized regression cases confirm fresh computation, reuse of the repaired cache, and byte-for-byte unchanged audio.
-- PR #57 final-head Windows CI: [37750219397](https://github.com/inoriko920-dev/V2-Full-Album-Maker/actions/runs/37750219397), **790 tests PASS**, Windows portable build and extracted audio/video smoke PASS.
-- PR #57 protected-main post-merge CI: [37750771995](https://github.com/inoriko920-dev/V2-Full-Album-Maker/actions/runs/37750771995), **790 tests PASS**, Windows portable build and A/V smoke PASS, source commit `e5bd1a68b8cd3dd14edd41f51676c7d9f84bd5f1`.
-- P01 planning documents: [PR #58](https://github.com/inoriko920-dev/V2-Full-Album-Maker/pull/58), planning DOCX and detailed quality plan; its protected-main CI [37752580397](https://github.com/inoriko920-dev/V2-Full-Album-Maker/actions/runs/37752580397) **790 PASS** at `a9143d0cfc62724bd3127a4cdbb6d6fe4a2e240d`.
-- No redesign of UI, no project/schema migration, no new dependencies, no Python/FFmpeg/font pin change, no change to export/render engine.
+## Verified stable release
 
-## P01 candidate identity (not a Q4 artifact)
+- Published: **October 8, 2026 at 16:29:52 WIB**.
+- Tag: `v2.0.5`, targets exact Q4 source commit `645fa166aa7a4cdc372b80c82db09026a7ab9b95`.
+- Windows portable: `Full-Album-Maker-v2.0.5-Windows-Portable.zip`.
+- ZIP size: **189598540 bytes**
+- ZIP SHA-256: `8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`
+- Q4 Windows workflow `37754857699`: **791 regression tests PASS**, separate real pinned Windows FFmpeg external-filter test **1 PASS**, extracted isolated audio/video portable smoke PASS, secret and provenance checks PASS.
+- Exact Q4 Actions artifact `11540026862`, name `q4-v2.0.5-windows-artifact-candidate`.
+- Q5 no-rebuild publication workflow `37756942493`: **SUCCESS**, exact Q4 ZIP verified, embedded manifest and capabilities checked, portable smoke repeated offline, final ZIP and checksum re-downloaded and verified after publication.
+- GitHub Release ID: `406656131`; Q5 evidence Actions artifact ID: `11540114007`.
+- Python 3.12.10, bundled FFmpeg, font and third-party license pins remain unchanged.
 
-- Candidate version fields: package `__version__`, `pyproject.toml` and canonical `build/release_manifest.json` each `2.0.5`.
-- Public README must continue to link the **verified published v2.0.4 ZIP**, size and SHA256SUMS until **v2.0.5 Q5 publication actually passes**.
-- Full Windows regression and extracted portable A/V smoke must PASS on the **exact P01 PR head** before merging metadata.
-- After P01 protected-main CI PASS, a **new** Q4 v2.0.5-specific workflow may generate and freeze the portable ZIP. That future Q4 must record the actual source commit, workflow run/job, Actions artifact ID, **inner ZIP bytes and SHA-256**.
-- Q5 must fetch that precise Q4 artifact by ID, verify the **inner ZIP** and embedded manifest/pins, smoke-test unchanged bytes offline, publish tag pointing directly to **Q4 source SHA**, and independently re-download the published release/checksum. **No rebuild, repack or retag**.
+Release page: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.5
 
-**P01 NOT PUBLISHED. Q4 NOT STARTED. Q5 NOT STARTED.** Do not invent v2.0.5 ZIP metadata.
+Direct Windows ZIP: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/download/v2.0.5/Full-Album-Maker-v2.0.5-Windows-Portable.zip
 
-## Rollback / historical releases
+SHA256SUMS.txt: https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/download/v2.0.5/SHA256SUMS.txt
 
-Latest verified published stable remains [Full Album Maker v2.0.4](https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.4).
+## Run on Windows
 
-- Tag/source SHA: `af5af1ce24aba17ff68d469390a0c3d21f80f44d`.
-- Published `Full-Album-Maker-v2.0.4-Windows-Portable.zip`: **189599237 bytes**.
-- Published SHA-256: `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`.
-- Official proof: `docs/implementation/Q4_V2_0_4_EVIDENCE.md` and `docs/implementation/Q5_V2_0_4_EVIDENCE.md`.
-- v2.0.3, v2.0.2, v2.0.1 and v2.0.0 remain available and immutable. The original `inoriko920-dev/Full-Album-Maker` repository must remain unchanged.
+Download the ZIP and SHA256SUMS.txt. Verify the ZIP SHA-256, extract to a separate writable folder on Windows 11, then start `Full Album Maker.exe` from that extracted folder. Do not run directly from inside the ZIP. Python and FFmpeg are bundled. Optional external AI features require appropriate provider configuration.
 
-## Release handoff
+## Previous stable / rollback
 
-Read `docs/release/V2_0_5_GATE_PLAN.md`, `docs/release/V2_FULL_ALBUM_MAKER_P01_V2_0_5_PLAN_2026-10-08.docx` and `docs/governance/AI_HANDOFF.md`. Each gate requires **actual** GitHub PASS evidence. Do not conflate routine build artifact with frozen Q4 ZIP or stable Q5 release.
+Published **v2.0.4** release remains unchanged:
+- Source/tag SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`.
+- Published `Full-Album-Maker-v2.0.4-Windows-Portable.zip` size: `189599237` bytes.
+- SHA-256: `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`.
 
-**Full Album Maker v2.0.5 is only a candidate.**
+Earlier v2.0.3, v2.0.2, v2.0.1, v2.0.0 and original `inoriko920-dev/Full-Album-Maker` repository remain untouched.
+
+## Audit evidence
+
+- `docs/implementation/Q4_V2_0_5_EVIDENCE.md` — exact frozen Windows artifact, source, Q4 tests and ZIP SHA-256.
+- `docs/implementation/Q5_V2_0_5_EVIDENCE.md` — no-rebuild publication, independent Windows ZIP smoke, GitHub published ZIP re-download.
+
+**v2.0.5 stable is published. Do not replace its tag, ZIP or SHA256SUMS.**

@@ -8,7 +8,7 @@ import pytest
 from full_album_maker import __version__ as CURRENT_VERSION
 
 # README must match the Q5-verified published stable, not an earlier candidate.
-PUBLISHED_STABLE = "2.0.4"
+PUBLISHED_STABLE = "2.0.5"
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,22 +109,19 @@ def test_wrong_release_commit_is_rejected() -> None:
 
 
 
-def test_published_stable_remains_v204_during_v205_candidate_preparation() -> None:
-    assert CURRENT_VERSION == "2.0.5"
-    assert PUBLISHED_STABLE == "2.0.4"
-    candidate = (ROOT / "docs/RELEASE_NOTES_v2.0.5.md").read_text(encoding="utf-8")
-    assert "Status: **Release candidate — not published**" in candidate
-    assert "**Q4 and Q5 pending.**" in candidate
-    stable_notes = (ROOT / "docs/RELEASE_NOTES_v2.0.4.md").read_text(encoding="utf-8")
-    assert "Status: **Stable — Q5 Release Quality Gate PASS**" in stable_notes
-    assert "Q4 and Q5 PASS" in stable_notes
-    evidence = (ROOT / "docs/implementation/Q5_V2_0_4_EVIDENCE.md").read_text(encoding="utf-8")
-    assert "Status: **PASS — Stable v2.0.4 PUBLISHED**" in evidence
-    assert "exact_zip_rebuilt = false" in evidence
-    assert "published_asset_redownload_verified = true" in evidence
+def test_current_version_matches_verified_published_v205_release() -> None:
+    assert CURRENT_VERSION == PUBLISHED_STABLE == "2.0.5"
+    notes = (ROOT / "docs/RELEASE_NOTES_v2.0.5.md").read_text(encoding="utf-8")
+    assert "Status: **Stable — Q5 Release Quality Gate PASS**" in notes
+    assert "Q4 and Q5 PASS" in notes
+    q5 = (ROOT / "docs/implementation/Q5_V2_0_5_EVIDENCE.md").read_text(encoding="utf-8")
+    assert "Status: **PASS — Stable v2.0.5 PUBLISHED**" in q5
+    assert "exact_zip_rebuilt = false" in q5
+    assert "published_asset_redownload_verified = true" in q5
+    assert "406656131" in q5
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "releases/download/v2.0.4/" in readme
-    assert "releases/download/v2.0.5/" not in readme
+    assert "releases/download/v2.0.5/" in readme
+    assert "docs/implementation/Q5_V2_0_5_EVIDENCE.md" in readme
 
 
 def test_readme_preserves_historical_rescue_checksums() -> None:

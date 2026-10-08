@@ -366,3 +366,16 @@ This supersedes earlier v2.0.4-as-current-source and v2.0.5-planning-only status
 - Q4 evidence: `docs/implementation/Q4_V2_0_5_EVIDENCE.md`, release gates: `docs/release/V2_0_5_GATE_PLAN.md`.
 - Q5 **NOT STARTED**. No v2.0.5 tag or published release. Do not treat ordinary Actions validation ZIP as stable. First verify post-PR #60 main CI and this evidence PR's exact-head and protected-main CI; only then begin Q5 no-rebuild release.
 - v2.0.4 stable source `af5af1ce24aba17ff68d469390a0c3d21f80f44d`, ZIP **189599237 bytes**, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b` is immutable. Other earlier stable assets and the original `inoriko920-dev/Full-Album-Maker` repo are likewise untouched.
+
+## October 8, 2026 — v2.0.5 STABLE PUBLISHED / Q5 PASS (latest)
+
+This **supersedes** the prior v2.0.5 Q4-only/Q5-pending and all prior latest-stable declarations, while retaining them as historical audit records.
+
+- **Latest official stable:** v2.0.5; Q4 **PASS/FROZEN**, Q5 **PASS/PUBLISHED**, return to post-release maintenance. Published release https://github.com/inoriko920-dev/V2-Full-Album-Maker/releases/tag/v2.0.5 (GitHub ID `406656131`), published `2026-10-08 16:29:52 WIB`.
+- Q4 frozen commit and release tag target `645fa166aa7a4cdc372b80c82db09026a7ab9b95`; Q4 Windows run `37754857699` (791 tests PASS + 1 real pinned FFmpeg test PASS + extracted offline A/V smoke PASS), artifact ID `11540026862`. PR #60 and protected-main CI `37755534261` PASS; evidence PR #61 and protected-main CI `37756315130` PASS.
+- Published **inner ZIP** `Full-Album-Maker-v2.0.5-Windows-Portable.zip`: **189598540 bytes**, SHA-256 `8a3cdc694b003cb8d1aff3e9a3e7d68591b0fd3b4106a29cea94dd9f45b82f74`.
+- Q5 exact no-rebuild Windows run `37756942493` **SUCCESS**, Q5 control commit `d7ed9f2191484fbd8a2e66f726b53634c5a9a482`. Downloaded exact Q4 Actions artifact, verified embedded provenance, isolated A/V smoke, published exactly that ZIP without rebuild, **re-downloaded** and verified public assets; Q5 evidence artifact ID `11540114007`.
+- Runtime improvement from PR #57: corrupted disposable Beat Analysis cache recovery; eight new regression cases. No authored audio/project mutation, no UI/schema/dependency change.
+- Release notes `docs/RELEASE_NOTES_v2.0.5.md`; Q4 and Q5 definitive evidence `docs/implementation/Q4_V2_0_5_EVIDENCE.md` and `docs/implementation/Q5_V2_0_5_EVIDENCE.md`; gate plan `docs/release/V2_0_5_GATE_PLAN.md`. Executed release workflow archived at `.github/workflows/v2-q5-v2.0.5-release.yml`.
+- Previously published stable **v2.0.4**, earlier releases and original `inoriko920-dev/Full-Album-Maker` untouched. Preserve tag/assets/checksum history. Any further executable change needs **v2.0.6 or later** with independently verified Q4/Q5.
+- After merging this documentation PR, independently verify its **protected-main Windows CI PASS**; this is a documentation validation gate only and does not rebuild or replace the stable v2.0.5 ZIP.
