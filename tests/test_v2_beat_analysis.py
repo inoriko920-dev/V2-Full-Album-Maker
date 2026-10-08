@@ -140,6 +140,9 @@ def test_corrupt_beat_cache_is_disposable_miss(tmp_path: Path) -> None:
         "invalid_envelope_text",
         "invalid_envelope_bool",
         "huge_envelope_number",
+        "huge_beat_timestamp",
+        "huge_duration",
+        "wrong_typed_beat_strength",
         "beat_beyond_audio_duration",
     ],
 )
@@ -171,6 +174,12 @@ def test_parseable_but_corrupt_beat_cache_triggers_fresh_analysis(
             payload["envelope"][0] = True
         elif malformation == "huge_envelope_number":
             payload["envelope"][0] = 10**400
+        elif malformation == "huge_beat_timestamp":
+            payload["beats"][0]["time_seconds"] = 10**400
+        elif malformation == "huge_duration":
+            payload["duration_seconds"] = 10**400
+        elif malformation == "wrong_typed_beat_strength":
+            payload["beats"][0]["strength"] = "0.9"
         elif malformation == "beat_beyond_audio_duration":
             payload["beats"][0]["time_seconds"] = first.duration_seconds + 100
         else:
