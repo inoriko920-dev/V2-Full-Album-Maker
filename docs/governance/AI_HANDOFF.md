@@ -369,3 +369,13 @@ This supersedes previous v2.0.3 Q4-only or Q5-pending status entries; their froz
 - Authoritative evidence: `docs/implementation/Q4_V2_0_3_EVIDENCE.md`, `docs/implementation/Q5_V2_0_3_EVIDENCE.md`.
 - v2.0.2, v2.0.1 and v2.0.0 release tags, ZIPs and checksums are unchanged and available for side-by-side rollback. Original `inoriko920-dev/Full-Album-Maker` repo remains untouched.
 - **Current phase:** post-release maintenance; all v2.0.3 Q4/Q5 gates completed. A changed executable needs a new version, fresh Windows CI and separately frozen Q4/Q5.
+
+## October 8, 2026 — v2.0.4 patch Q4 frozen; Q5 held
+
+The previously published latest stable was v2.0.3 and is still the latest **downloadable** release. The active source has now advanced to v2.0.4 **candidate only** through PR #53. Maintain all original STEP 00–11 UI, state, schema, render, and release promises.
+
+**Current Q4 source-of-truth:** `docs/implementation/Q4_V2_0_4_EVIDENCE.md`, `docs/release/V2_0_4_GATE_PLAN.md`. Q4 exact source SHA: `af5af1ce24aba17ff68d469390a0c3d21f80f44d`; Q4 run: `37745568166`, job `113206108661`, artifact **ID `11536240883`** (`q4-v2.0.4-windows-artifact-candidate`). The actual **inner** `Full-Album-Maker-v2.0.4-Windows-Portable.zip` is **189599237 bytes**, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`. The Actions **wrapper** has a DIFFERENT size/hash.
+
+Q4 Windows run `37745568166` PASS (782 regression tests, 1 real pinned FFmpeg filter-script test, secret/provenance and isolated A/V smoke); PR #54 generic Windows run `37745591187` PASS. PR #54 merged as `1ebbb49d0ecfc2da1b450d5f7142af879728a9d9`, which **is not** the Q4 source SHA. Before any Q5 work: verify protected-main run `37746119351` PASS, Q4 artifact provenance and unexpired status, previous v2.0.3 stable intact, and absence of v2.0.4 tag/release.
+
+**Q5 NOT STARTED.** Never publish rebuilt ZIPs, change the Q4 candidate SHA, create an unverified stable release, or change the old `inoriko920-dev/Full-Album-Maker` repository. Use the new v2.0.4-only Q5 workflow after explicit gate checks; verify exact inner ZIP/manifest/no-global-tools smoke before publish, and re-download published assets after publish.

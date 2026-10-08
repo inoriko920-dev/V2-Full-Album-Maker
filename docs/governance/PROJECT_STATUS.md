@@ -317,3 +317,19 @@ This supersedes previous v2.0.3 Q4-only or Q5-pending status entries; their froz
 - Authoritative evidence: `docs/implementation/Q4_V2_0_3_EVIDENCE.md`, `docs/implementation/Q5_V2_0_3_EVIDENCE.md`.
 - v2.0.2, v2.0.1 and v2.0.0 release tags, ZIPs and checksums are unchanged and available for side-by-side rollback. Original `inoriko920-dev/Full-Album-Maker` repo remains untouched.
 - **Current phase:** post-release maintenance; all v2.0.3 Q4/Q5 gates completed. A changed executable needs a new version, fresh Windows CI and separately frozen Q4/Q5.
+
+## October 8, 2026 — v2.0.4 Q4 frozen / Q5 not started
+
+This supersedes the earlier v2.0.3-as-current-maintenance sections for **source development**, without altering their historical published-release evidence.
+
+- **Current phase:** RELEASE PATCH v2.0.4. P01 PASS; **Q4 PASS/FROZEN**; **Q5 NOT STARTED**.
+- Published/latest downloadable stable **remains v2.0.3**, unchanged.
+- Runtime fix: PR #52 thumbnail lifecycle guard (closed cache refuses new jobs and suppresses late completion) merged; exact-head Windows CI `37743420847` PASS (780 tests), protected-main `37743973995` PASS.
+- P01 version candidate PR #53 merged; exact-head run `37744463640` PASS (782 tests); post-merge main `37745055766` PASS.
+- Isolated v2.0.4 Q4 workflow PR #54: exact **frozen candidate SHA `af5af1ce24aba17ff68d469390a0c3d21f80f44d`**, Q4 run `37745568166` PASS (782 regressions, 1 pinned FFmpeg test, portable build, isolated A/V smoke, metadata/notices/secret scan).
+- Exact Q4 **inner ZIP**: `Full-Album-Maker-v2.0.4-Windows-Portable.zip`, **189599237 bytes**, SHA-256 `888cc98fbb610cc96cd9187ed7e6ca894bfeb87e4e17d3376de0882be642564b`.
+- Q4 artifact ID `11536240883`, name `q4-v2.0.4-windows-artifact-candidate`, attached to exact Q4 run. Its wrapper bytes/digest differ from the inner portable ZIP.
+- PR #54 generic Windows validation `37745591187` PASS and squash-merged as `1ebbb49d0ecfc2da1b450d5f7142af879728a9d9`. **This is not the Q4 frozen source SHA.**
+- Independent protected-main CI after PR #54: run `37746119351`, **must be verified PASS before Q5**.
+- Q4 primary evidence: `docs/implementation/Q4_V2_0_4_EVIDENCE.md`. Gate plan: `docs/release/V2_0_4_GATE_PLAN.md`.
+- **Next step:** after successful Q4 postmerge main CI and evidence-doc PR validation, create isolated v2.0.4 Q5 publication workflow that downloads and verifies this exact frozen Q4 artifact **without rebuild**. Do not publish/tag/replace previous releases based on ordinary `main` validation.
