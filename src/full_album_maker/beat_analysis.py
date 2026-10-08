@@ -355,7 +355,16 @@ class BeatAnalysisService:
                 for value in raw_envelope
             ):
                 raise ValueError("nilai envelope cache tidak valid")
-            if any(not isinstance(item, dict) for item in raw_beats):
+            if any(
+                not isinstance(item, dict)
+                or any(
+                    field not in item
+                    or isinstance(item[field], bool)
+                    or not isinstance(item[field], (int, float))
+                    for field in ("time_seconds", "strength")
+                )
+                for item in raw_beats
+            ):
                 raise ValueError("entri beat cache tidak valid")
             envelope = _normalized_envelope(raw_envelope)
             beats = tuple(
@@ -380,7 +389,7 @@ class BeatAnalysisService:
                 available=True,
                 cache_hit=True,
             )
-        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, KeyError):
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, OverflowError, KeyError):
             self.cache_manager.evict("beat-analysis", cache_path)
             return None
 
