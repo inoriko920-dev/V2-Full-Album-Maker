@@ -265,3 +265,36 @@ def test_save_as_sidecar_migration_collision_keeps_local_and_disk_records(
     assert store.has_pending_changes
     assert store.get("new-id").tags == ("source",)
     assert external.path.read_bytes() == disk_before
+
+
+
+def test_save_as_conflicting_new_id_only_never_overwrites_destination(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(media_feature.visual_mod, "images", lambda _project: [])
+    fake = _fake(Project())
+    store = fake._s03_store
+    store.set("old-id", SidecarRecord(tags=("local-source",)), persist=False)
+    store.migrate_asset_id("old-id", "new-id", persist=False)
+
+    project_path = tmp_path / "DestinationNewOnly.json"
+    project_path.write_text("{}", encoding="utf-8")
+    external = MediaSidecarStore(project_path)
+    # Unlike the existing collision test, there is NO old-id on disk.
+    external.set("new-id", SidecarRecord(tags=("external-destination",)))
+    before = external.path.read_bytes()
+
+    fake._foundation_project_path = str(project_path)
+    media_feature._refresh_media(fake, reset=False)
+
+    assert fake._s03_store is store
+    assert store.has_pending_changes
+    assert store.get("new-id").tags == ("local-source",)
+    assert external.path.read_bytes() == before
+    assert MediaSidecarStore(project_path).get("new-id").tags == ("external-destination",)
+    assert any("belum dapat disimpan" in message for message in fake.log.lines)
+
+    media_feature._refresh_media(fake, reset=True)
+    assert store.has_pending_changes
+    assert external.path.read_bytes() == before
