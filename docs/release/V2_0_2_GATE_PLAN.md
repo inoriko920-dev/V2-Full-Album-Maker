@@ -1,6 +1,6 @@
 # v2.0.2 patch release — governed release plan and handoff
 
-Status: **P01 IN PROGRESS — Q4/Q5 BLOCKED, NOT PUBLISHED**
+Status: **P01 PASS, Q4 PASS/FROZEN — Q5 NOT STARTED, NOT PUBLISHED**
 
 ## Source of truth
 
@@ -45,4 +45,10 @@ Immutability: do not modify historical v2.0.0/v2.0.1 tags, release assets, check
 
 Read `docs/governance/AI_HANDOFF.md`, `docs/governance/PROJECT_STATUS.md`, `docs/implementation/Q4_V2_0_1_EVIDENCE.md`, `docs/implementation/Q5_V2_0_1_EVIDENCE.md`, and `docs/release/V2_0_1_GATE_PLAN.md` before Q4 or Q5.
 
-**Next permitted work:** complete P01 candidate CI PASS then merge; do not skip to Q4 before independent post-merge main PASS; do not publish before Q5 success.
+**P01 evidence:** PR #40 merged; Windows CI on `main` run `37731780154` PASS on SHA `dc2f585c45036e24b8d844a522cdc03e3f8c1eb5`.
+
+**Q4 evidence:** PR #41 merged; Windows Q4 run `37732261424` PASS on frozen candidate source SHA `2678b9f93364334c7eaf9ebad9ef7e079533716f`. Artifact ID `11530243260`, exact portable ZIP `Full-Album-Maker-v2.0.2-Windows-Portable.zip`, `189599767` bytes, SHA-256 `701e0b68de17ec30ad17620d5cb5ef47e29bb28ca36ad0c95e5c242757c70c64`. Complete evidence `docs/implementation/Q4_V2_0_2_EVIDENCE.md`.
+
+**Main after PR #41:** Windows run `37732736075` needs independent success check before Q5 release execution.
+
+**Next permitted work:** dedicated v2.0.2 Q5 workflow locked to the frozen Q4 artifact; never rebuild for Q5. Do not claim stable until Q5 completes and published assets are re-downloaded and verified.
